@@ -1,0 +1,63 @@
+# Arduino / Portenta H7 - .gitignore
+
+# Build files
+build/
+*.bin
+*.hex
+*.elf
+*.map
+
+# IDE specific files
+.vscode/
+.vs/
+*.code-workspace
+
+# Arduino IDE
+*.ino.eep
+*.ino.elf
+*.ino.hex
+*.ino.with_bootloader.bin
+*.ino.with_bootloader.hex
+
+# Backup files
+*~
+*.bak
+*.tmp
+*.swp
+
+# OS specific
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Compiled Object files
+*.o
+*.obj
+*.a
+*.lib
+
+# Python (jeśli używasz skryptów pomocniczych)
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Node.js (jeśli używasz Node-RED)
+node_modules/
+package-lock.json
+
+# Certificates and keys (WAŻNE!)
+*.pem
+*.key
+*.crt
+*.pfx
+secrets.h
+config_secret.h
+
+# Temporary files
+tmp/
+temp/
