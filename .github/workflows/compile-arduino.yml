@@ -1,0 +1,75 @@
+name: Compile Arduino Sketch for Portenta H7
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Arduino CLI
+      uses: arduino/setup-arduino-cli@v1
+    
+    - name: Install Arduino Mbed OS Portenta Boards
+      run: |
+        arduino-cli core update-index
+        arduino-cli core install arduino:mbed_portenta
+    
+    - name: Install required libraries
+      run: |
+        arduino-cli lib install "Adafruit NeoPixel"
+        arduino-cli lib install "PubSubClient"
+        arduino-cli lib install "DHT sensor library"
+        arduino-cli lib install "Adafruit Unified Sensor"
+        arduino-cli lib install "OneWire"
+        arduino-cli lib install "DallasTemperature"
+        arduino-cli lib install "NTPClient"
+    
+    - name: Compile sketch for Portenta H7
+      run: |
+        arduino-cli compile --fqbn arduino:mbed_portenta:envie_m7 ./PortentaH7_Stairs --output-dir ./build
+    
+    - name: List build artifacts
+      run: |
+        echo "Build artifacts:"
+        ls -lah ./build
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: portenta-h7-stairs-firmware
+        path: |
+          ./build/**/*.bin
+          ./build/**/*.elf
+          ./build/**/*.hex
+          PortentaH7_Stairs.ino
+        retention-days: 10
+    
+    - name: Create release package
+      run: |
+        mkdir -p release
+        cp PortentaH7_Stairs.ino release/
+        cp README.md release/ 2>/dev/null || true
+        cp WIRING_DIAGRAM.md release/ 2>/dev/null || true
+        cp MQTT_EXAMPLES.md release/ 2>/dev/null || true
+        if [ -d "./build" ]; then
+          find ./build -name '*.bin' -exec cp {} release/ \; 2>/dev/null || true
+          find ./build -name '*.hex' -exec cp {} release/ \; 2>/dev/null || true
+        fi
+        cd release
+        zip -r ../PortentaH7_Stairs_Release.zip .
+    
+    - name: Upload release package
+      uses: actions/upload-artifact@v4
+      with:
+        name: portenta-h7-stairs-release-package
+        path: PortentaH7_Stairs_Release.zip
+        retention-days: 10
