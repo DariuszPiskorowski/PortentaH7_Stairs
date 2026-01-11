@@ -1,62 +1,6 @@
 # Schemat Połączeń - Portenta H7 Stairs Controller
 
-## Diagram ASCII
 
-```
-                                    ZASILANIE
-                                    ┌──────────────┐
-                                    │ Zasilacz 5V  │
-                                    │    15A       │
-                                    └──┬───────┬───┘
-                                       │       │
-                                      5V      GND
-                                       │       │
-    ┌──────────────────────────────────┼───────┼──────────┐
-    │                                  │       │          │
-    │         PORTENTA H7              │       │          │
-    │                                  │       │          │
-    │  ┌─────────────────┐             │       │          │
-    │  │                 │             │       │          │
-    │  │   M7 Core       │             │       │          │
-    │  │   480 MHz       │             │       │          │
-    │  │                 │             │       │          │
-    │  └─────────────────┘             │       │          │
-    │                                  │       │          │
-    │  D6  ────────────────────────────┼───────┼──────────┼──→ WS2812 DIN
-    │                                  │       │          │
-    │  D7  ─────────────┐              │       │          │
-    │                   │              │       │          │
-    │  3.3V ────────┬───┼──────────────┼───────┤          │
-    │               │   │              │       │          │
-    │  GND  ────────┼───┼──────────────┼───────┼──────────┼──→ WS2812 GND
-    │               │   │              │       │          │
-    │  D8  ─────────│───┼──────────┐   │       │          │
-    │               │   │          │   │       │          │
-    └───────────────┼───┼──────────┼───┴───────┴──────────┘
-                    │   │          │
-                    │   │          │
-              ┌─────┴───┼──────────┼────────┐
-              │ 10kΩ    │          │ 4.7kΩ  │
-              │         │          │        │
-         ┌────┴────┐    │     ┌────┴────┐   │
-         │  DHT22  │    │     │DS18B20  │   │
-         │         │    │     │         │   │
-         │  Data ──┴────┘     │  Data ──┴───┘
-         │  VCC  ──────────────→ 3.3V
-         │  GND  ──────────────→ GND
-         └─────────┘            └─────────┘
-
-
-                    WS2812 LED STRIP (240 LEDs)
-         ┌──────────────────────────────────────────┐
-         │  ●●●●●●●●●●●●●●●●●  Stopień 1  (17 LEDs) │
-         │  ●●●●●●●●●●●●●●●●●  Stopień 2  (17 LEDs) │
-         │  ●●●●●●●●●●●●●●●●●  Stopień 3  (17 LEDs) │
-         │         ...                               │
-         │  ●●●●●●●●●●●●●●●●●  Stopień 14 (17 LEDs) │
-         └──────────────────────────────────────────┘
-                Total: 240 LEDs
-```
 
 ## Szczegóły Połączeń
 
@@ -84,7 +28,7 @@
 | **GND** | ───────→ | **GND** | Masa |
 | **3.3V** + **10kΩ** + **D7** | | | Rezystor pull-up |
 
-📝 **DHT22 Pinout** (patrząc od przodu z otworami):
+📝 **DHT22 Pinout** (patrząc od przodu z otworami)
 ```
 ┌─────────────┐
 │  DHT22      │
@@ -174,19 +118,8 @@
 - Bezpiecznik 20A w linii zasilania 5V (opcjonalnie)
 
 ### Montaż na Schodach
-```
-  Stopień 14  ═══════════════ ●● (17 LEDs)
-  Stopień 13  ═══════════════ ●● (17 LEDs)
-  Stopień 12  ═══════════════ ●● (17 LEDs)
-     ...
-  Stopień 2   ═══════════════ ●● (17 LEDs)
-  Stopień 1   ═══════════════ ●● (17 LEDs)
-               ↑
-           [Portenta H7]
-         [Zasilacz 5V/15A]
-```
 
-- Listwa LED montowana pod krawędzią każdego stopnia
+- Listwa LED montowana wzdluz schodow
 - Portenta montowana w dolnej części schodów (łatwy dostęp)
 - Czujniki DHT22 i DS18B20 w pobliżu Portenty
 
