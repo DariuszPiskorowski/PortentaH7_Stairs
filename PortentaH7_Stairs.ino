@@ -95,6 +95,7 @@ DallasTemperature ds18b20(&oneWire);
 WiFiUDP ntpUDP;
 // Offset ustawiany dynamicznie (DST dla Dublina)
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000); // start z UTC, aktualizacja co 60s
+int currentTimeOffsetSeconds = 0; // bieżący offset czasu (DST)
 
 // ===== ZMIENNE GLOBALNE =====
 LightMode currentMode = MODE_OFF;
@@ -224,10 +225,11 @@ void loop() {
   
   // Aktualizuj czas z NTP i dostosuj offset DST dla Dublina
   timeClient.update();
-  unsigned long utcEpoch = timeClient.getEpochTime() - timeClient.getTimeOffset();
+  unsigned long utcEpoch = timeClient.getEpochTime() - currentTimeOffsetSeconds;
   int targetOffset = getDublinOffsetSeconds(utcEpoch);
-  if (timeClient.getTimeOffset() != targetOffset) {
-    timeClient.setTimeOffset(targetOffset);
+  if (currentTimeOffsetSeconds != targetOffset) {
+    currentTimeOffsetSeconds = targetOffset;
+    timeClient.setTimeOffset(currentTimeOffsetSeconds);
     timeClient.update(); // odśwież z poprawnym offsetem
   }
   
