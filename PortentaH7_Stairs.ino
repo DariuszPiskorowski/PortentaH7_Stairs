@@ -23,8 +23,31 @@
 #include <WiFiUdp.h>
 #include <time.h>
 
-// Wrażliwe dane (SSID/hasła/MQTT) przeniesione do osobnego nagłówka
-#include "secrets.h"
+// Wymagane makra konfiguracyjne (przekazywane np. przez -D w arduino-cli / CI)
+#ifndef WIFI_SSID_PRIMARY
+#error "WIFI_SSID_PRIMARY not defined"
+#endif
+
+#ifndef WIFI_SSID_FALLBACK
+#error "WIFI_SSID_FALLBACK not defined"
+#endif
+
+#ifndef WIFI_PASSWORD
+#error "WIFI_PASSWORD not defined"
+#endif
+
+#ifndef MQTT_SERVER
+#error "MQTT_SERVER not defined"
+#endif
+
+#ifndef MQTT_USER
+#error "MQTT_USER not defined"
+#endif
+
+#ifndef MQTT_PASSWORD
+#error "MQTT_PASSWORD not defined"
+#endif
+
 
 // ===== KONFIGURACJA PINÓW =====
 #define LED_PIN           D6      // WS2812 Data Pin
@@ -43,14 +66,15 @@ const char* password = WIFI_PASSWORD;
 
 // ===== KONFIGURACJA MQTT =====
 const char* mqtt_server = MQTT_SERVER;
-const int mqtt_port = MQTT_PORT;
+const int mqtt_port = 1883;
 const char* mqtt_user = MQTT_USER;
 const char* mqtt_password = MQTT_PASSWORD;
-const char* mqtt_topic_input = MQTT_TOPIC_INPUT;
-const char* mqtt_topic_output = MQTT_TOPIC_OUTPUT;
-const char* mqtt_topic_temp_dht = MQTT_TOPIC_TEMP_DHT;
-const char* mqtt_topic_humidity = MQTT_TOPIC_HUMIDITY;
-const char* mqtt_topic_temp_ds = MQTT_TOPIC_TEMP_DS;
+
+const char* mqtt_topic_input = "Stairs/Light/input";
+const char* mqtt_topic_output = "Stairs/Light/output";
+const char* mqtt_topic_temp_dht = "HallDown/Dht/Temperature";
+const char* mqtt_topic_humidity = "HallDown/Dht/Humidity";
+const char* mqtt_topic_temp_ds = "HallDown/DS18B20/Temperature";
 const char* device_name = "Stairs"; // Identyfikacja w sieci/MQTT
 const char* device_hostname = "Stairs"; // Nazwa hosta widoczna w DHCP/skanowaniu sieci
 
