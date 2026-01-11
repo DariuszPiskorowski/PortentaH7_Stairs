@@ -3,7 +3,9 @@
 =======
 # Portenta H7 - Smart Stairs Lighting Controller
 
-Inteligentny system sterowania oświetleniem schodów z użyciem listwy LED WS2812 i czujników temperatury.
+Inteligentny system sterowania oświetleniem schodów z użyciem listwy LED WS2812 i czujników temperatury. 
+Projekt raczej testowy niz produkcyjny ze wzgledu na cene portentyH7 oraz cene Carriera. Ekonomicznie nie uzasadnione!
+
 
 ## 📋 Specyfikacja
 
@@ -16,9 +18,9 @@ Inteligentny system sterowania oświetleniem schodów z użyciem listwy LED WS28
 - **Zasilanie**: 5V dla listwy WS2812
 
 ### Sieć
-- **WiFi**: JPP2 lub eir-JPP (automatyczny wybór silniejszej sieci)
-- **Hasło WiFi**: `faf804a3d766`
-- **MQTT Broker**: `192.168.1.109:1883`
+- **WiFi**: ***** lub ***** (automatyczny wybór silniejszej sieci)
+- **Hasło WiFi**: `********************`
+- **MQTT Broker**: `*****************`
 
 ### Topiki MQTT
 
@@ -93,33 +95,10 @@ System automatycznie przełącza się między trybami w zależności od czasu:
 
 ## 📡 Komendy MQTT
 
-Wyślij na topik `Stairs/Light/input`:
-
-### Ustawienie czasu zachodu słońca
-```
-sunset:17:30
-```
-
-### Ustawienie czasu wschodu słońca
-```
-sunrise:07:15
-```
-
-### Ustawienie godzin trybu nocnego (opcjonalne)
-```
-night:21:00-05:30
-```
 
 ### Sprawdzenie statusu
 ```
 status
-```
-
-### Przykład w Node-RED lub mosquitto:
-```bash
-mosquitto_pub -h 192.168.1.109 -t "Stairs/Light/input" -m "sunset:18:45"
-mosquitto_pub -h 192.168.1.109 -t "Stairs/Light/input" -m "sunrise:06:30"
-mosquitto_pub -h 192.168.1.109 -t "Stairs/Light/input" -m "status"
 ```
 
 ## 📚 Wymagane Biblioteki
@@ -192,26 +171,6 @@ Zainstaluj następujące biblioteki przez Arduino IDE (Sketch → Include Librar
 
 ## 🔧 Konfiguracja
 
-Jeśli potrzebujesz zmienić podstawowe ustawienia, edytuj następujące linie w pliku `.ino`:
-
-```cpp
-// WiFi
-const char* ssid1 = "JPP2";
-const char* ssid2 = "eir-JPP";
-const char* password = "faf804a3d766";
-
-// MQTT
-const char* mqtt_server = "192.168.1.109";
-
-// Piny
-#define LED_PIN           D6
-#define DHT_PIN           D7
-#define DS18B20_PIN       D8
-
-// LEDy
-#define NUM_LEDS          240
-#define NUM_STAIRS        14
-```
 
 ## 🐛 Rozwiązywanie Problemów
 
@@ -221,12 +180,12 @@ const char* mqtt_server = "192.168.1.109";
 - Upewnij się, że GND Portenty i zasilacza 5V są wspólne
 
 ### Brak połączenia WiFi
-- Sprawdź czy obie sieci (JPP2, eir-JPP) są dostępne
+- Sprawdź czy obie sieci (****2, eir****) są dostępne
 - Sprawdź hasło
 - Zobacz logi w Serial Monitor
 
 ### Brak połączenia MQTT
-- Sprawdź czy broker MQTT działa na 192.168.1.109
+- Sprawdź czy broker MQTT działa na 192.168.***.***
 - Sprawdź czy Portenta ma połączenie z siecią
 - Sprawdź firewall
 
