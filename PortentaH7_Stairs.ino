@@ -21,6 +21,10 @@
 #include <DallasTemperature.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <time.h>
+
+// Wrażliwe dane (SSID/hasła/MQTT) przeniesione do osobnego nagłówka
+#include "secrets.h"
 
 // ===== KONFIGURACJA PINÓW =====
 #define LED_PIN           D6      // WS2812 Data Pin
@@ -33,18 +37,22 @@
 #define LEDS_PER_STAIR    17      // 240/14 ≈ 17 LEDów na stopień
 
 // ===== KONFIGURACJA WIFI =====
-const char* ssid1 = "JPP2";
-const char* ssid2 = "eir-JPP";
-const char* password = "faf804a3d766";
+const char* ssid1 = WIFI_SSID_PRIMARY;
+const char* ssid2 = WIFI_SSID_FALLBACK;
+const char* password = WIFI_PASSWORD;
 
 // ===== KONFIGURACJA MQTT =====
-const char* mqtt_server = "192.168.1.109";
-const int mqtt_port = 1883;
-const char* mqtt_topic_input = "Stairs/Light/input";
-const char* mqtt_topic_output = "Stairs/Light/output";
-const char* mqtt_topic_temp_dht = "HallDown/Dht/Temperature";
-const char* mqtt_topic_humidity = "HallDown/Dht/Humidity";
-const char* mqtt_topic_temp_ds = "HallDown/DS18B20/Temperature";
+const char* mqtt_server = MQTT_SERVER;
+const int mqtt_port = MQTT_PORT;
+const char* mqtt_user = MQTT_USER;
+const char* mqtt_password = MQTT_PASSWORD;
+const char* mqtt_topic_input = MQTT_TOPIC_INPUT;
+const char* mqtt_topic_output = MQTT_TOPIC_OUTPUT;
+const char* mqtt_topic_temp_dht = MQTT_TOPIC_TEMP_DHT;
+const char* mqtt_topic_humidity = MQTT_TOPIC_HUMIDITY;
+const char* mqtt_topic_temp_ds = MQTT_TOPIC_TEMP_DS;
+const char* device_name = "Stairs"; // Identyfikacja w sieci/MQTT
+const char* device_hostname = "Stairs"; // Nazwa hosta widoczna w DHCP/skanowaniu sieci
 
 // ===== TRYBY OŚWIETLENIA =====
 enum LightMode {
@@ -61,7 +69,8 @@ DHT dht(DHT_PIN, DHT22);
 OneWire oneWire(DS18B20_PIN);
 DallasTemperature ds18b20(&oneWire);
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 3600, 60000); // UTC+1, update co 60s
+// Offset ustawiany dynamicznie (DST dla Dublina)
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000); // start z UTC, aktualizacja co 60s
 
 // ===== ZMIENNE GLOBALNE =====
 LightMode currentMode = MODE_OFF;
@@ -78,6 +87,68 @@ const unsigned long modeCheckInterval = 10000; // Sprawdzanie trybu co 10s
 
 bool dhtAvailable = false;
 bool ds18b20Available = false;
+
+// Wylicza środek stopnia, rozdzielając równomiernie 240 LEDów na 14 segmentów
+int getStairCenterIndex(int stairIndex) {
+  int base = NUM_LEDS / NUM_STAIRS;
+  int remainder = NUM_LEDS % NUM_STAIRS;
+  int start = stairIndex * base + (stairIndex < remainder ? stairIndex : remainder);
+  int length = base + (stairIndex < remainder ? 1 : 0);
+  return start + (length / 2);
+}
+
+// ===== KALKULACJA DST (Dublin) =====
+int dayOfWeek(int year, int month, int day) {
+  static const int t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+  if (month < 3) year -= 1;
+  return (year + year / 4 - year / 100 + year / 400 + t[month - 1] + day) % 7; // 0 = niedziela
+}
+
+int daysInMonth(int year, int month) {
+  static const int baseDays[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+  int dim = baseDays[month - 1];
+  bool leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+  if (month == 2 && leap) dim = 29;
+  return dim;
+}
+
+int lastSundayOfMonth(int year, int month) {
+  int dim = daysInMonth(year, month);
+  int dow = dayOfWeek(year, month, dim);
+  return dim - dow; // cofamy się o dzień tygodnia; niedziela → dow=0 → dim
+}
+
+long long daysFromCivil(int y, unsigned m, unsigned d) {
+  y -= m <= 2;
+  const int era = (y >= 0 ? y : y - 399) / 400;
+  const unsigned yoe = (unsigned)(y - era * 400);           // [0, 399]
+  const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1; // [0, 365]
+  const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;          // [0, 146096]
+  return era * 146097LL + (long long)doe - 719468; // dni od 1970-01-01
+}
+
+time_t makeUtc(int year, int month, int day, int hour, int minute, int second) {
+  long long days = daysFromCivil(year, (unsigned)month, (unsigned)day);
+  return (time_t)(days * 86400LL + hour * 3600 + minute * 60 + second);
+}
+
+bool isDublinDST(unsigned long utcEpoch) {
+  struct tm* utc = gmtime((time_t*)&utcEpoch);
+  if (!utc) return false;
+  int year = utc->tm_year + 1900;
+
+  int marchSunday = lastSundayOfMonth(year, 3);
+  int octSunday   = lastSundayOfMonth(year, 10);
+
+  time_t dstStart = makeUtc(year, 3, marchSunday, 1, 0, 0); // 01:00 UTC w ostatnią niedzielę marca
+  time_t dstEnd   = makeUtc(year, 10, octSunday, 1, 0, 0);   // 01:00 UTC w ostatnią niedzielę października
+
+  return utcEpoch >= (unsigned long)dstStart && utcEpoch < (unsigned long)dstEnd;
+}
+
+int getDublinOffsetSeconds(unsigned long utcEpoch) {
+  return isDublinDST(utcEpoch) ? 3600 : 0; // Lato: UTC+1, Zima: UTC
+}
 
 // ===== SETUP =====
 void setup() {
@@ -114,6 +185,11 @@ void loop() {
   // Utrzymuj połączenie WiFi
   if (WiFi.status() != WL_CONNECTED) {
     connectWiFi();
+    // Jeśli nadal brak WiFi, pomiń resztę iteracji – MQTT i NTP i tak nie zadziałają
+    if (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      return;
+    }
   }
   
   // Utrzymuj połączenie MQTT
@@ -122,8 +198,14 @@ void loop() {
   }
   mqttClient.loop();
   
-  // Aktualizuj czas z NTP
+  // Aktualizuj czas z NTP i dostosuj offset DST dla Dublina
   timeClient.update();
+  unsigned long utcEpoch = timeClient.getEpochTime() - timeClient.getTimeOffset();
+  int targetOffset = getDublinOffsetSeconds(utcEpoch);
+  if (timeClient.getTimeOffset() != targetOffset) {
+    timeClient.setTimeOffset(targetOffset);
+    timeClient.update(); // odśwież z poprawnym offsetem
+  }
   
   // Sprawdź tryb oświetlenia
   unsigned long now = millis();
@@ -168,11 +250,15 @@ void initSensors() {
 // ===== POŁĄCZENIE WiFi =====
 void connectWiFi() {
   Serial.print("Connecting to WiFi");
+
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_PORTENTA_H7_M7) || defined(ARDUINO_PORTENTA_H7_M4)
+  WiFi.setHostname(device_hostname);
+#endif
   
   // Próba połączenia z pierwszą siecią
   WiFi.begin(ssid1, password);
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+  while (WiFi.status() != WL_CONNECTED && attempts < 5) {
     delay(500);
     Serial.print(".");
     attempts++;
@@ -183,7 +269,7 @@ void connectWiFi() {
     Serial.print("\nTrying alternative network");
     WiFi.begin(ssid2, password);
     attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 5) {
       delay(500);
       Serial.print(".");
       attempts++;
@@ -220,13 +306,12 @@ void reconnectMQTT() {
   
   Serial.print("Connecting to MQTT...");
   
-  String clientId = "PortentaH7-Stairs-";
-  clientId += String(random(0xffff), HEX);
+  String clientId = String("PortentaH7-") + device_name + "-" + String(random(0xffff), HEX);
   
-  if (mqttClient.connect(clientId.c_str())) {
+  if (mqttClient.connect(clientId.c_str(), mqtt_user, mqtt_password)) {
     Serial.println("Connected!");
     mqttClient.subscribe(mqtt_topic_input);
-    mqttClient.publish(mqtt_topic_output, "Portenta H7 Stairs Online");
+    mqttClient.publish(mqtt_topic_output, (String(device_name) + " Online").c_str());
     Serial.print("Subscribed to: ");
     Serial.println(mqtt_topic_input);
     
@@ -346,9 +431,9 @@ void applyLightMode() {
       break;
       
     case MODE_NIGHT_10:
-      // 14 punktów (środek każdego stopnia) z jasnością 10%
+      // 14 punktów (środek każdego stopnia) z jasnością 10% rozłożone równomiernie po 240 LEDach
       for (int stair = 0; stair < NUM_STAIRS; stair++) {
-        int ledIndex = stair * LEDS_PER_STAIR + LEDS_PER_STAIR / 2; // Środek stopnia
+        int ledIndex = getStairCenterIndex(stair);
         strip.setPixelColor(ledIndex, strip.Color(25, 25, 25)); // Biały 10%
       }
       break;
@@ -392,7 +477,8 @@ void readAndPublishSensors() {
   // DS18B20
   if (ds18b20Available) {
     ds18b20.requestTemperatures();
-    delay(100);
+    // DS18B20 przy maksymalnej rozdzielczości wymaga do ~750 ms — dajemy 900 ms zapasu
+    delay(900);
     float temp = ds18b20.getTempCByIndex(0);
     
     if (temp != DEVICE_DISCONNECTED_C && temp > -50 && temp < 100) {
@@ -410,7 +496,8 @@ void readAndPublishSensors() {
 // ===== PUBLIKACJA INFORMACJI WIFI =====
 void publishWiFiInfo() {
   if (WiFi.status() == WL_CONNECTED) {
-    String wifiInfo = "WiFi - SSID: " + String(WiFi.SSID()) + 
+    String wifiInfo = "WiFi - Device: " + String(device_name) +
+                      " | SSID: " + String(WiFi.SSID()) + 
                       " | IP: " + WiFi.localIP().toString() + 
                       " | Signal: " + String(WiFi.RSSI()) + " dBm";
     mqttClient.publish(mqtt_topic_output, wifiInfo.c_str());
@@ -422,6 +509,7 @@ void publishWiFiInfo() {
 void publishStatus() {
   String status = "Time: " + String(timeClient.getHours()) + ":" + 
                   String(timeClient.getMinutes()) + 
+                  " | Device: " + String(device_name) +
                   " | Day: " + String(isDayTime ? "1" : "0") +
                   " | Night Hours: " + String(nightStartHour) + ":" + 
                   String(nightStartMinute) + "-" + String(nightEndHour) + ":" + 

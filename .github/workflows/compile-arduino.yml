@@ -35,7 +35,7 @@ jobs:
     
     - name: Compile sketch for Portenta H7
       run: |
-        arduino-cli compile --fqbn arduino:mbed_portenta:envie_m7 ./PortentaH7_Stairs --output-dir ./build
+        arduino-cli compile --fqbn arduino:mbed_portenta:envie_m7 . --output-dir ./build
     
     - name: List build artifacts
       run: |

@@ -56,7 +56,9 @@ package-lock.json
 *.crt
 *.pfx
 secrets.h
+secret.h
 config_secret.h
+.env
 
 # Temporary files
 tmp/
