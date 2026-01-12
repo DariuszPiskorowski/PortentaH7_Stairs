@@ -14,17 +14,23 @@
  */
 
 #include <WiFi.h>
-#include <PubSubClient.h>
-#include <Adafruit_NeoPixel.h>
-#include <DHT.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include <NTPClient.h>
-#include <WiFiUdp.h>
-#include <time.h>
+// TYMCZASOWO ZAKOMENTOWANE - TESTOWANIE WIFI
+// #include <PubSubClient.h>
+// #include <Adafruit_NeoPixel.h>
+// #include <DHT.h>
+// #include <OneWire.h>
+// #include <DallasTemperature.h>
+// #include <NTPClient.h>
+// #include <WiFiUdp.h>
+// #include <time.h>
 
 // Definicja portu debugowania dla Portenta H7
 #define DBG SerialUSB
+
+// Portenta H7 - wbudowane LEDy RGB (aktywne LOW)
+#define LED_RED   LEDR
+#define LED_GREEN LEDG
+#define LED_BLUE  LEDB
 
 // Wymagane makra konfiguracyjne (przekazywane np. przez -D w arduino-cli / CI)
 #ifndef WIFI_SSID_PRIMARY
@@ -52,80 +58,82 @@
 #endif
 
 
-// ===== KONFIGURACJA PINÓW =====
-#define LED_PIN           D6      // WS2812 Data Pin
-#define DHT_PIN           D7      // DHT22 Pin
-#define DS18B20_PIN       D8      // DS18B20 Pin
+// ===== KONFIGURACJA PINÓW ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+// #define LED_PIN           D6      // WS2812 Data Pin
+// #define DHT_PIN           D7      // DHT22 Pin
+// #define DS18B20_PIN       D8      // DS18B20 Pin
 
-// ===== KONFIGURACJA WS2812 =====
-#define NUM_LEDS          240     // Całkowita liczba LEDów
-#define NUM_STAIRS        14      // Liczba stopni
-#define LEDS_PER_STAIR    17      // 240/14 ≈ 17 LEDów na stopień
+// ===== KONFIGURACJA WS2812 ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+// #define NUM_LEDS          240     // Całkowita liczba LEDów
+// #define NUM_STAIRS        14      // Liczba stopni
+// #define LEDS_PER_STAIR    17      // 240/14 ≈ 17 LEDów na stopień
 
 // ===== KONFIGURACJA WIFI =====
 const char* ssid1 = WIFI_SSID_PRIMARY;
 const char* ssid2 = WIFI_SSID_FALLBACK;
 const char* password = WIFI_PASSWORD;
 
-// ===== KONFIGURACJA MQTT =====
-const char* mqtt_server = MQTT_SERVER;
-const int mqtt_port = 1883;
-const char* mqtt_user = MQTT_USER;
-const char* mqtt_password = MQTT_PASSWORD;
-
-const char* mqtt_topic_input = "Stairs/Light/input";
-const char* mqtt_topic_output = "Stairs/Light/output";
-const char* mqtt_topic_temp_dht = "HallDown/Dht/Temperature";
-const char* mqtt_topic_humidity = "HallDown/Dht/Humidity";
-const char* mqtt_topic_temp_ds = "HallDown/DS18B20/Temperature";
+// ===== KONFIGURACJA MQTT ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+// const char* mqtt_server = MQTT_SERVER;
+// const int mqtt_port = 1883;
+// const char* mqtt_user = MQTT_USER;
+// const char* mqtt_password = MQTT_PASSWORD;
+// 
+// const char* mqtt_topic_input = "Stairs/Light/input";
+// const char* mqtt_topic_output = "Stairs/Light/output";
+// const char* mqtt_topic_temp_dht = "HallDown/Dht/Temperature";
+// const char* mqtt_topic_humidity = "HallDown/Dht/Humidity";
+// const char* mqtt_topic_temp_ds = "HallDown/DS18B20/Temperature";
 const char* device_name = "Stairs"; // Identyfikacja w sieci/MQTT
 const char* device_hostname = "Stairs"; // Nazwa hosta widoczna w DHCP/skanowaniu sieci
 
-// ===== TRYBY OŚWIETLENIA =====
-enum LightMode {
-  MODE_OFF,
-  MODE_AQUA_50,    // Wszystkie LEDy, Aqua 50%
-  MODE_NIGHT_10    // 14 punktów, 10%
-};
+// ===== TRYBY OŚWIETLENIA ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+// enum LightMode {
+//   MODE_OFF,
+//   MODE_AQUA_50,    // Wszystkie LEDy, Aqua 50%
+//   MODE_NIGHT_10    // 14 punktów, 10%
+// };
 
-// ===== OBIEKTY GLOBALNE =====
-WiFiClient espClient;
-PubSubClient mqttClient(espClient);
-Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
-DHT dht(DHT_PIN, DHT22);
-OneWire oneWire(DS18B20_PIN);
-DallasTemperature ds18b20(&oneWire);
-WiFiUDP ntpUDP;
+// ===== OBIEKTY GLOBALNE ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+// WiFiClient espClient;
+// PubSubClient mqttClient(espClient);
+// Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+// DHT dht(DHT_PIN, DHT22);
+// OneWire oneWire(DS18B20_PIN);
+// DallasTemperature ds18b20(&oneWire);
+// WiFiUDP ntpUDP;
 // Offset ustawiany dynamicznie (DST dla Dublina)
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000); // start z UTC, aktualizacja co 60s
-int currentTimeOffsetSeconds = 0; // bieżący offset czasu (DST)
+// NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000); // start z UTC, aktualizacja co 60s
+// int currentTimeOffsetSeconds = 0; // bieżący offset czasu (DST)
 
-// ===== ZMIENNE GLOBALNE =====
-LightMode currentMode = MODE_OFF;
-bool isDayTime = true;    // true = dzień (day=1), false = noc (day=0)
-int nightStartHour = 21;  // Początek trybu nocnego: 21:00
-int nightStartMinute = 0;
-int nightEndHour = 5;     // Koniec trybu nocnego: 5:30
-int nightEndMinute = 30;
+// ===== ZMIENNE GLOBALNE ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+// LightMode currentMode = MODE_OFF;
+// bool isDayTime = true;    // true = dzień (day=1), false = noc (day=0)
+// int nightStartHour = 21;  // Początek trybu nocnego: 21:00
+// int nightStartMinute = 0;
+// int nightEndHour = 5;     // Koniec trybu nocnego: 5:30
+// int nightEndMinute = 30;
+// 
+// unsigned long lastSensorRead = 0;
+// const unsigned long sensorInterval = 60000; // Odczyt czujników co 60s
+// unsigned long lastModeCheck = 0;
+// const unsigned long modeCheckInterval = 10000; // Sprawdzanie trybu co 10s
+// 
+// bool dhtAvailable = false;
+// bool ds18b20Available = false;
 
-unsigned long lastSensorRead = 0;
-const unsigned long sensorInterval = 60000; // Odczyt czujników co 60s
-unsigned long lastModeCheck = 0;
-const unsigned long modeCheckInterval = 10000; // Sprawdzanie trybu co 10s
-
-bool dhtAvailable = false;
-bool ds18b20Available = false;
-
+// ===== FUNKCJE POMOCNICZE ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
 // Wylicza środek stopnia, rozdzielając równomiernie 240 LEDów na 14 segmentów
-int getStairCenterIndex(int stairIndex) {
-  int base = NUM_LEDS / NUM_STAIRS;
-  int remainder = NUM_LEDS % NUM_STAIRS;
-  int start = stairIndex * base + (stairIndex < remainder ? stairIndex : remainder);
-  int length = base + (stairIndex < remainder ? 1 : 0);
-  return start + (length / 2);
-}
+// int getStairCenterIndex(int stairIndex) {
+//   int base = NUM_LEDS / NUM_STAIRS;
+//   int remainder = NUM_LEDS % NUM_STAIRS;
+//   int start = stairIndex * base + (stairIndex < remainder ? stairIndex : remainder);
+//   int length = base + (stairIndex < remainder ? 1 : 0);
+//   return start + (length / 2);
+// }
 
-// ===== KALKULACJA DST (Dublin) =====
+// ===== KALKULACJA DST (Dublin) ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+/*
 int dayOfWeek(int year, int month, int day) {
   static const int t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
   if (month < 3) year -= 1;
@@ -177,6 +185,7 @@ bool isDublinDST(unsigned long utcEpoch) {
 int getDublinOffsetSeconds(unsigned long utcEpoch) {
   return isDublinDST(utcEpoch) ? 3600 : 0; // Lato: UTC+1, Zima: UTC
 }
+*/
 
 // ===== SETUP =====
 void setup() {
@@ -195,38 +204,50 @@ void setup() {
   delay(500); // Dodatkowy czas na stabilizację
   
   DBG.println("\n\n==============================================");
-  DBG.println("=== Portenta H7 Stairs Controller START ===");
+  DBG.println("=== Portenta H7 WiFi TEST - Simplified ===");
   DBG.println("==============================================");
   DBG.print("DBG: Timestamp: ");
   DBG.println(millis());
   
-  // Inicjalizacja WS2812
-  DBG.println("DBG: Initializing WS2812...");
-  strip.begin();
-  strip.clear();
-  strip.show();
-  DBG.println("DBG: WS2812 Initialized OK");
+  // Inicjalizacja wbudowanych LEDów RGB (aktywne LOW)
+  DBG.println("DBG: Initializing RGB LEDs...");
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+  digitalWrite(LED_RED, HIGH);    // Wyłącz czerwoną
+  digitalWrite(LED_GREEN, HIGH);  // Wyłącz zieloną
+  digitalWrite(LED_BLUE, HIGH);   // Wyłącz niebieską
+  DBG.println("DBG: RGB LEDs initialized (all OFF)");
   
-  // Inicjalizacja czujników
-  DBG.println("DBG: Initializing sensors...");
-  initSensors();
-  DBG.println("DBG: Sensors initialized");
+  // ZAKOMENTOWANE - TESTOWANIE WIFI
+  // // Inicjalizacja WS2812
+  // DBG.println("DBG: Initializing WS2812...");
+  // strip.begin();
+  // strip.clear();
+  // strip.show();
+  // DBG.println("DBG: WS2812 Initialized OK");
+  // 
+  // // Inicjalizacja czujników
+  // DBG.println("DBG: Initializing sensors...");
+  // initSensors();
+  // DBG.println("DBG: Sensors initialized");
   
   // Połączenie WiFi
   DBG.println("DBG: Starting WiFi connection...");
   connectWiFi();
   
-  // Konfiguracja MQTT
-  DBG.println("DBG: Configuring MQTT client...");
-  mqttClient.setServer(mqtt_server, mqtt_port);
-  mqttClient.setCallback(mqttCallback);
-  mqttClient.setBufferSize(512);
-  DBG.println("DBG: MQTT client configured");
-  
-  // Uruchomienie NTP
-  DBG.println("DBG: Starting NTP client...");
-  timeClient.begin();
-  DBG.println("DBG: NTP Client Started OK");
+  // ZAKOMENTOWANE - TESTOWANIE WIFI
+  // // Konfiguracja MQTT
+  // DBG.println("DBG: Configuring MQTT client...");
+  // mqttClient.setServer(mqtt_server, mqtt_port);
+  // mqttClient.setCallback(mqttCallback);
+  // mqttClient.setBufferSize(512);
+  // DBG.println("DBG: MQTT client configured");
+  // 
+  // // Uruchomienie NTP
+  // DBG.println("DBG: Starting NTP client...");
+  // timeClient.begin();
+  // DBG.println("DBG: NTP Client Started OK");
   
   DBG.println("==============================================");
   DBG.println("=== Setup Complete - Entering Main Loop ===");
@@ -237,53 +258,69 @@ void setup() {
 void loop() {
   // Utrzymuj połączenie WiFi
   if (WiFi.status() != WL_CONNECTED) {
-    DBG.println("DBG: WiFi disconnected, reconnecting...");
+    DBG.println("\nDBG: WiFi disconnected in loop, reconnecting...");
     connectWiFi();
-    // Jeśli nadal brak WiFi, pomiń resztę iteracji – MQTT i NTP i tak nie zadziałają
+    // Jeśli nadal brak WiFi, pomiń resztę iteracji
     if (WiFi.status() != WL_CONNECTED) {
       delay(500);
       return;
     }
   }
   
-  // Utrzymuj połączenie MQTT
-  if (!mqttClient.connected()) {
-    DBG.println("DBG: MQTT disconnected, reconnecting...");
-    reconnectMQTT();
-  }
-  mqttClient.loop();
+  // ZAKOMENTOWANE - TESTOWANIE WIFI
+  // // Utrzymuj połączenie MQTT
+  // if (!mqttClient.connected()) {
+  //   DBG.println("DBG: MQTT disconnected, reconnecting...");
+  //   reconnectMQTT();
+  // }
+  // mqttClient.loop();
+  // 
+  // // Aktualizuj czas z NTP i dostosuj offset DST dla Dublina
+  // timeClient.update();
+  // unsigned long utcEpoch = timeClient.getEpochTime() - currentTimeOffsetSeconds;
+  // int targetOffset = getDublinOffsetSeconds(utcEpoch);
+  // if (currentTimeOffsetSeconds != targetOffset) {
+  //   DBG.print("DBG: DST offset changed from ");
+  //   DBG.print(currentTimeOffsetSeconds);
+  //   DBG.print(" to ");
+  //   DBG.println(targetOffset);
+  //   currentTimeOffsetSeconds = targetOffset;
+  //   timeClient.setTimeOffset(currentTimeOffsetSeconds);
+  //   timeClient.update(); // odśwież z poprawnym offsetem
+  // }
+  // 
+  // // Sprawdź tryb oświetlenia
+  // unsigned long now = millis();
+  // if (now - lastModeCheck >= modeCheckInterval) {
+  //   lastModeCheck = now;
+  //   updateLightMode();
+  // }
+  // 
+  // // Odczyt czujników
+  // if (now - lastSensorRead >= sensorInterval) {
+  //   lastSensorRead = now;
+  //   readAndPublishSensors();
+  // }
   
-  // Aktualizuj czas z NTP i dostosuj offset DST dla Dublina
-  timeClient.update();
-  unsigned long utcEpoch = timeClient.getEpochTime() - currentTimeOffsetSeconds;
-  int targetOffset = getDublinOffsetSeconds(utcEpoch);
-  if (currentTimeOffsetSeconds != targetOffset) {
-    DBG.print("DBG: DST offset changed from ");
-    DBG.print(currentTimeOffsetSeconds);
-    DBG.print(" to ");
-    DBG.println(targetOffset);
-    currentTimeOffsetSeconds = targetOffset;
-    timeClient.setTimeOffset(currentTimeOffsetSeconds);
-    timeClient.update(); // odśwież z poprawnym offsetem
-  }
-  
-  // Sprawdź tryb oświetlenia
-  unsigned long now = millis();
-  if (now - lastModeCheck >= modeCheckInterval) {
-    lastModeCheck = now;
-    updateLightMode();
-  }
-  
-  // Odczyt czujników
-  if (now - lastSensorRead >= sensorInterval) {
-    lastSensorRead = now;
-    readAndPublishSensors();
+  // Informacja o działającym programie
+  static unsigned long lastHeartbeat = 0;
+  if (millis() - lastHeartbeat >= 10000) {
+    lastHeartbeat = millis();
+    DBG.println("DBG: Heartbeat - WiFi connected, program running...");
+    DBG.print("DBG: SSID: ");
+    DBG.print(WiFi.SSID());
+    DBG.print(" | IP: ");
+    DBG.print(WiFi.localIP());
+    DBG.print(" | RSSI: ");
+    DBG.print(WiFi.RSSI());
+    DBG.println(" dBm");
   }
   
   delay(100);
 }
 
-// ===== INICJALIZACJA CZUJNIKÓW =====
+// ===== INICJALIZACJA CZUJNIKÓW ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+/*
 void initSensors() {
   // DHT22
   DBG.println("DBG: Testing DHT22 sensor...");
@@ -313,60 +350,166 @@ void initSensors() {
     DBG.println("DBG: DS18B20 Not detected (will continue without it)");
   }
 }
+*/
 
 // ===== POŁĄCZENIE WiFi =====
 void connectWiFi() {
-  DBG.println("DBG: Starting WiFi connection process...");
-  DBG.print("DBG: Attempting connection to: ");
-  DBG.println(ssid1);
-  DBG.print("Connecting to WiFi");
-
+  DBG.println("\n======================================");
+  DBG.println("DBG: Starting WiFi connection process");
+  DBG.println("======================================");
+  
+  DBG.print("DBG: STEP 1 - Setting hostname: ");
+  DBG.println(device_hostname);
 #if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_PORTENTA_H7_M7) || defined(ARDUINO_PORTENTA_H7_M4)
   WiFi.setHostname(device_hostname);
+  DBG.println("DBG: Hostname set successfully");
+#else
+  DBG.println("DBG: Hostname not supported on this platform");
 #endif
   
-  // Próba połączenia z pierwszą siecią
+  DBG.println("\nDBG: STEP 2 - Attempting connection to primary network");
+  DBG.print("DBG: SSID: ");
+  DBG.println(ssid1);
+  DBG.print("DBG: Password length: ");
+  DBG.println(strlen(password));
+  
+  // Zapal niebieską LED - rozpoczęcie łączenia
+  DBG.println("DBG: Turning ON BLUE LED (connecting...)");
+  digitalWrite(LED_BLUE, LOW);  // LOW = świeci
+  
+  DBG.println("DBG: Calling WiFi.begin()...");
   WiFi.begin(ssid1, password);
+  delay(100);
+  DBG.println("DBG: WiFi.begin() called, waiting for connection...");
+  
+  // Próba połączenia z pierwszą siecią
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 5) {
-    delay(500);
-    DBG.print(".");
+  while (WiFi.status() != WL_CONNECTED && attempts < 10) {
+    // Miganie niebieską LED podczas łączenia
+    digitalWrite(LED_BLUE, !digitalRead(LED_BLUE));
+    delay(250);
+    
+    DBG.print("DBG: Attempt ");
+    DBG.print(attempts + 1);
+    DBG.print("/10 - WiFi status: ");
+    DBG.print(WiFi.status());
+    DBG.print(" (");
+    switch(WiFi.status()) {
+      case WL_IDLE_STATUS: DBG.print("IDLE"); break;
+      case WL_NO_SSID_AVAIL: DBG.print("NO_SSID_AVAILABLE"); break;
+      case WL_SCAN_COMPLETED: DBG.print("SCAN_COMPLETED"); break;
+      case WL_CONNECTED: DBG.print("CONNECTED"); break;
+      case WL_CONNECT_FAILED: DBG.print("CONNECT_FAILED"); break;
+      case WL_CONNECTION_LOST: DBG.print("CONNECTION_LOST"); break;
+      case WL_DISCONNECTED: DBG.print("DISCONNECTED"); break;
+      default: DBG.print("UNKNOWN"); break;
+    }
+    DBG.println(")");
+    
     attempts++;
   }
   
   // Jeśli nie udało się, próbuj drugiej sieci
   if (WiFi.status() != WL_CONNECTED) {
-    DBG.print("\nDBG: Primary network failed, trying: ");
+    DBG.println("\n======================================");
+    DBG.println("DBG: STEP 3 - Primary network failed!");
+    DBG.println("DBG: Trying alternative network...");
+    DBG.println("======================================");
+    DBG.print("DBG: Alternative SSID: ");
     DBG.println(ssid2);
-    DBG.print("Connecting to alternative network");
+    
+    DBG.println("DBG: Calling WiFi.begin() for alternative network...");
     WiFi.begin(ssid2, password);
+    delay(100);
+    DBG.println("DBG: WiFi.begin() called, waiting for connection...");
+    
     attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 5) {
-      delay(500);
-      DBG.print(".");
+    while (WiFi.status() != WL_CONNECTED && attempts < 10) {
+      // Kontynuuj miganie niebieską LED
+      digitalWrite(LED_BLUE, !digitalRead(LED_BLUE));
+      delay(250);
+      
+      DBG.print("DBG: Attempt ");
+      DBG.print(attempts + 1);
+      DBG.print("/10 - WiFi status: ");
+      DBG.print(WiFi.status());
+      DBG.print(" (");
+      switch(WiFi.status()) {
+        case WL_IDLE_STATUS: DBG.print("IDLE"); break;
+        case WL_NO_SSID_AVAIL: DBG.print("NO_SSID_AVAILABLE"); break;
+        case WL_SCAN_COMPLETED: DBG.print("SCAN_COMPLETED"); break;
+        case WL_CONNECTED: DBG.print("CONNECTED"); break;
+        case WL_CONNECT_FAILED: DBG.print("CONNECT_FAILED"); break;
+        case WL_CONNECTION_LOST: DBG.print("CONNECTION_LOST"); break;
+        case WL_DISCONNECTED: DBG.print("DISCONNECTED"); break;
+        default: DBG.print("UNKNOWN"); break;
+      }
+      DBG.println(")");
+      
       attempts++;
     }
   }
   
+  DBG.println("\n======================================");
+  DBG.println("DBG: STEP 4 - Connection Result");
+  DBG.println("======================================");
+  
   if (WiFi.status() == WL_CONNECTED) {
-    DBG.println("\n=== WiFi Connected Successfully ===");
-    DBG.print("DBG: SSID: ");
+    // Zgaś niebieską LED i zapal zieloną
+    digitalWrite(LED_BLUE, HIGH);   // Zgaś niebieską
+    digitalWrite(LED_GREEN, LOW);   // Zapal zieloną (LOW = świeci)
+    
+    DBG.println("\n*** WiFi Connected Successfully! ***");
+    DBG.println("DBG: GREEN LED turned ON");
+    DBG.println("\nDBG: Connection Details:");
+    DBG.print("DBG:   - SSID: ");
     DBG.println(WiFi.SSID());
-    DBG.print("DBG: IP Address: ");
+    DBG.print("DBG:   - IP Address: ");
     DBG.println(WiFi.localIP());
-    DBG.print("DBG: Signal Strength: ");
+    DBG.print("DBG:   - MAC Address: ");
+    DBG.println(WiFi.macAddress());
+    DBG.print("DBG:   - Signal Strength (RSSI): ");
     DBG.print(WiFi.RSSI());
     DBG.println(" dBm");
+    DBG.print("DBG:   - Gateway: ");
+    DBG.println(WiFi.gatewayIP());
+    DBG.print("DBG:   - Subnet Mask: ");
+    DBG.println(WiFi.subnetMask());
+    DBG.print("DBG:   - DNS: ");
+    DBG.println(WiFi.dnsIP());
     
-    // Publikuj info o WiFi przez MQTT (po połączeniu z brokerem)
-    delay(100); // Krótkie opóźnienie przed publikacją
+    DBG.println("======================================\n");
+    
+    // ZAKOMENTOWANE - TESTOWANIE WIFI
+    // // Publikuj info o WiFi przez MQTT (po połączeniu z brokerem)
+    // delay(100); // Krótkie opóźnienie przed publikacją
   } else {
-    DBG.println("\nDBG: WiFi Connection FAILED after all attempts!");
+    // Zgaś niebieską LED
+    digitalWrite(LED_BLUE, HIGH);
+    
+    DBG.println("\n*** WiFi Connection FAILED! ***");
+    DBG.println("DBG: Connection failed after all attempts");
+    DBG.print("DBG: Final WiFi status: ");
+    DBG.print(WiFi.status());
+    DBG.print(" (");
+    switch(WiFi.status()) {
+      case WL_IDLE_STATUS: DBG.print("IDLE"); break;
+      case WL_NO_SSID_AVAIL: DBG.print("NO_SSID_AVAILABLE"); break;
+      case WL_SCAN_COMPLETED: DBG.print("SCAN_COMPLETED"); break;
+      case WL_CONNECTED: DBG.print("CONNECTED"); break;
+      case WL_CONNECT_FAILED: DBG.print("CONNECT_FAILED"); break;
+      case WL_CONNECTION_LOST: DBG.print("CONNECTION_LOST"); break;
+      case WL_DISCONNECTED: DBG.print("DISCONNECTED"); break;
+      default: DBG.print("UNKNOWN"); break;
+    }
+    DBG.println(")");
     DBG.println("DBG: Will retry in next loop iteration");
+    DBG.println("======================================\n");
   }
 }
 
-// ===== POŁĄCZENIE MQTT =====
+// ===== POŁĄCZENIE MQTT ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+/*
 void reconnectMQTT() {
   if (WiFi.status() != WL_CONNECTED) return;
   
@@ -403,8 +546,10 @@ void reconnectMQTT() {
     DBG.println("DBG: Will retry in 5 seconds");
   }
 }
+*/
 
-// ===== CALLBACK MQTT =====
+// ===== CALLBACK MQTT ===== (ZAKOMENTOWANE - TESTOWANIE WIFI)
+/*
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String message = "";
   for (unsigned int i = 0; i < length; i++) {
@@ -628,3 +773,4 @@ void publishStatus() {
   // Publikuj również info o WiFi
   publishWiFiInfo();
 }
+*/
