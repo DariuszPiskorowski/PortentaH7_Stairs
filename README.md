@@ -1,10 +1,8 @@
-<<<<<<< HEAD
-# PortentaH7_Stairs
-=======
+
 # Portenta H7 - Smart Stairs Lighting Controller
 
 Inteligentny system sterowania oświetleniem schodów z użyciem listwy LED WS2812 i czujników temperatury. 
-Projekt raczej testowy niz produkcyjny ze wzgledu na cene portentyH7 oraz cene Carriera. Ekonomicznie nie uzasadnione!
+Projekt raczej testowy niz produkcyjny ze wzgledu na cene portentyH7 oraz cene Carriera. Ekonomicznie nieuzasadnione!
 
 
 ## 📋 Specyfikacja
