@@ -66,14 +66,14 @@ jobs:
     - name: Create release package
       run: |
         mkdir -p release
-        cp PortentaH7_Stairs.ino release/
         cp README.md release/ 2>/dev/null || true
         cp WIRING_DIAGRAM.md release/ 2>/dev/null || true
         cp MQTT_EXAMPLES.md release/ 2>/dev/null || true
         if [ -d "./build" ]; then
-          find ./build -name '*.bin' -exec cp {} release/ \; 2>/dev/null || true
-          find ./build -name '*.hex' -exec cp {} release/ \; 2>/dev/null || true
+          find ./build -name '*.ino.bin' -exec sh -c 'cp "$1" release/PortentaH7_Stairs.bin' _ {} \; 2>/dev/null || true
+          find ./build -name '*.ino.hex' -exec sh -c 'cp "$1" release/PortentaH7_Stairs.hex' _ {} \; 2>/dev/null || true
         fi
+        cp PortentaH7_Stairs.ino release/
         cd release
         zip -r ../PortentaH7_Stairs_Release.zip .
     
