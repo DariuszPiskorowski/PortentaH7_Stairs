@@ -22,26 +22,38 @@
 #ifndef WIFI_SSID_PRIMARY
 #error "WIFI_SSID_PRIMARY not defined"
 #endif
+// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
+//#define WIFI_SSID_PRIMARY "YourPrimarySSID"
 
 #ifndef WIFI_SSID_FALLBACK
 #error "WIFI_SSID_FALLBACK not defined"
 #endif
+// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
+//#define WIFI_SSID_FALLBACK "YourFallbackSSID"
 
 #ifndef WIFI_PASSWORD
 #error "WIFI_PASSWORD not defined"
 #endif
+// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
+//#define WIFI_PASSWORD "YourWiFiPassword"
 
 #ifndef MQTT_SERVER
 #error "MQTT_SERVER not defined"
 #endif
+// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
+//#define MQTT_SERVER "your.mqtt.server"
 
 #ifndef MQTT_USER
 #error "MQTT_USER not defined"
 #endif
+// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
+//#define MQTT_USER "your_mqtt_username"
 
 #ifndef MQTT_PASSWORD
 #error "MQTT_PASSWORD not defined"
 #endif
+// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
+//#define MQTT_PASSWORD "your_mqtt_password"
 
 
 // ===== KONFIGURACJA PINÓW =====
