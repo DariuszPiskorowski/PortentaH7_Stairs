@@ -51,6 +51,12 @@ jobs:
       run: |
         echo "Build artifacts:"
         ls -lah ./build
+        echo ""
+        echo "Checking for compiled binaries:"
+        find ./build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.elf" \) -exec ls -lh {} \;
+        echo ""
+        echo "File sizes:"
+        find ./build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.elf" \) -exec du -h {} \;
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
