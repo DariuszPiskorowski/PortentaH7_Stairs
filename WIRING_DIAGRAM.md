@@ -23,10 +23,10 @@
 
 | Portenta Pin | Połączenie | DHT22 Pin | Notatki |
 |--------------|-----------|-----------|---------|
-| **D7** | ───────→ | **Data** | Sygnał danych |
+| **D5** | ───────→ | **Data** | Sygnał danych |
 | **3.3V** | ───────→ | **VCC** | Zasilanie 3.3V |
 | **GND** | ───────→ | **GND** | Masa |
-| **3.3V** + **10kΩ** + **D7** | | | Rezystor pull-up |
+| **3.3V** + **10kΩ** + **D5** | | | Rezystor pull-up |
 
 📝 **DHT22 Pinout** (patrząc od przodu z otworami)
 ```
@@ -44,7 +44,7 @@
  VCC Data NC GND
 ```
 - Pin 1: VCC (3.3V)
-- Pin 2: Data (D7)
+- Pin 2: Data (D5)
 - Pin 3: NC (nie podłączony)
 - Pin 4: GND
 
@@ -52,10 +52,10 @@
 
 | Portenta Pin | Połączenie | DS18B20 Pin | Kolor przewodu | Notatki |
 |--------------|-----------|-------------|----------------|---------|
-| **D8** | ───────→ | **Data** | Żółty | Sygnał danych (OneWire) |
+| **D1** | ───────→ | **Data** | Żółty | Sygnał danych (OneWire) |
 | **3.3V** | ───────→ | **VCC** | Czerwony | Zasilanie 3.3V |
 | **GND** | ───────→ | **GND** | Czarny | Masa |
-| **3.3V** + **4.7kΩ** + **D8** | | | | Rezystor pull-up |
+| **3.3V** + **4.7kΩ** + **D1** | | | | Rezystor pull-up |
 
 📝 **DS18B20 Pinout** (patrząc na płaską stronę):
 ```
@@ -79,22 +79,22 @@
 
 ### Komponenty Główne
 
-| Ilość | Komponent | Specyfikacja | Cena (szacunkowa) |
-|-------|-----------|--------------|-------------------|
-| 1 | Arduino Portenta H7 | M7+M4 core | ~90€ |
-| 1 | Listwa LED WS2812 | 60 LED/m, 4m (240 LEDs) | ~40€ |
-| 1 | Czujnik DHT22 | Temperatura + Wilgotność | ~5€ |
-| 1 | Czujnik DS18B20 | Temperatura wodoodporna | ~3€ |
-| 1 | Zasilacz 5V | 15A (75W) | ~15€ |
-| 1 | Rezystor 10kΩ | ¼W | ~0.10€ |
-| 1 | Rezystor 4.7kΩ | ¼W | ~0.10€ |
-| 1 | Kondensator 1000µF | 6.3V elektrolit | ~0.50€ |
-| 1 | Rezystor 330Ω | ¼W (opcjonalny) | ~0.10€ |
+| Ilość | Komponent          | Specyfikacja             | 
+|-------|--------------------|--------------------------|
+| 1 | Arduino Portenta H7    | M7+M4 core               |
+| 1 | Listwa LED WS2812      | 60 LED/m, 4m (240 LEDs)  |
+| 1 | Czujnik DHT22          | Temperatura + Wilgotność |
+| 1 | Czujnik DS18B20        | Temperatura wodoodporna  |
+| 1 | Zasilacz 5V            | 15A (75W)                | 
+| 1 | Rezystor 10kΩ          | ¼W                       | 
+| 1 | Rezystor 4.7kΩ         | ¼W                       | 
+| 1 | Kondensator 1000µF     | 6.3V elektrolit          | 
+| 1 | Rezystor 330Ω          | ¼W (opcjonalny)          | 
 
 ### Dodatkowe Materiały
 
 - Przewody połączeniowe (jumper wires)
-- Płytka prototypowa lub PCB
+- Płytka prototypowa lub PCB najlepiej ze zlaczem 40pin
 - Obudowa dla Portenty
 - Przewody zasilające 18 AWG (dla listwy LED)
 - Złączki/konektory

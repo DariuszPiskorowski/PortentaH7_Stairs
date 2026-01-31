@@ -38,8 +38,8 @@ Projekt raczej testowy niz produkcyjny ze wzgledu na cene portentyH7 oraz cene C
 | Komponent | Pin | Opis |
 |-----------|-----|------|
 | WS2812 Data | D6 | Sygnał danych do listwy LED |
-| DHT22 Data | D7 | Sygnał z czujnika DHT22 |
-| DS18B20 Data | D8 | Sygnał z czujnika DS18B20 (OneWire) |
+| DHT22 Data | D5 | Sygnał z czujnika DHT22 |
+| DS18B20 Data | D1 | Sygnał z czujnika DS18B20 (OneWire) |
 
 ### Schemat połączeń
 
@@ -53,7 +53,7 @@ GND        ──→ WS2812 GND
 
 #### DHT22
 ```
-Portenta D7  ──→ DHT22 Data
+Portenta D5  ──→ DHT22 Data
 3.3V         ──→ DHT22 VCC
 GND          ──→ DHT22 GND
 Rezystor 10kΩ między VCC a Data (pull-up)
@@ -61,7 +61,7 @@ Rezystor 10kΩ między VCC a Data (pull-up)
 
 #### DS18B20
 ```
-Portenta D8  ──→ DS18B20 Data (żółty)
+Portenta D1  ──→ DS18B20 Data (żółty)
 3.3V         ──→ DS18B20 VCC (czerwony)
 GND          ──→ DS18B20 GND (czarny)
 Rezystor 4.7kΩ między VCC a Data (pull-up)
@@ -259,3 +259,23 @@ Projekt stworzony dla systemu inteligentnego domu.
 **Data**: Styczeń 2026  
 **Status**: Produkcja
 >>>>>>> b9357bb (Initial commit: Portenta H7 Stairs Controller with WiFi, MQTT, WS2812, DHT22, DS18B20)
+
+## Mapowanie Pinow z Portenta H7 na Carrier Hat na zlaczu 40pin
+
+Ref  |nr pinu|funkcja|zlacza J
+|----|-------|----------------|
+D0  -> pin 37  PWM6  J2-62
+D1  -> pin 36  PWM5  J2-60
+D2  -> pin 33  PWM4  J2-59
+D3  -> pin 31  PWM3
+D4  -> pin 26  PWM2
+D5  -> pin 22  PWM1  J2-61
+D6  -> pin 7   PWM0  J2-59
+D7  -> pin 24  SPI1 CE
+D8  -> pin 19  SPI1_MOSI  
+D9  -> pin 23  SPI1 SCK
+D10 -> pin 21  SPI1_MISO
+D11 -> pin 27  I2C0 SDA
+D12 -> pin 28  I2C0 SCL
+D13 -> pin 29  RX1
+D14 -> pin 32  TX1
