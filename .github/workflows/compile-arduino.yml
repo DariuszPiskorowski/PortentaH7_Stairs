@@ -32,6 +32,7 @@ jobs:
         arduino-cli lib install "OneWire"
         arduino-cli lib install "DallasTemperature"
         arduino-cli lib install "NTPClient"
+        arduino-cli lib install "LiquidCrystal I2C"
     
     - name: Compile sketch for Portenta H7
       env:
