@@ -9,6 +9,7 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <time.h>
+#include <LiquidCrystal_I2C.h>
 
 // Definicja portu debugowania dla Portenta H7
 #define DBG SerialUSB
@@ -115,6 +116,11 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000); // start z UTC, aktualizacja co 60s
 int currentTimeOffsetSeconds = 0; // bieżący offset czasu (DST)
 
+// ===== WYŚWIETLACZ LCD 1602 I2C =====
+// Standardowy adres I2C dla LCD 1602: 0x27 lub 0x3F
+LiquidCrystal_I2C lcd(0x27, 16, 2); // adres 0x27, 16 kolumn, 2 wiersze
+bool lcdAvailable = false;
+
 // ===== ZMIENNE GLOBALNE =====
 LightMode currentMode = MODE_OFF;
 bool isDayTime = true;    // true = dzień (day=1), false = noc (day=0)
@@ -127,6 +133,8 @@ unsigned long lastWifiPublish = 0;
 const unsigned long wifiPublishInterval = 30000; // Publikacja WiFi/Time co 30s
 unsigned long lastModeCheck = 0;
 const unsigned long modeCheckInterval = 10000; // Sprawdzanie trybu co 10s
+unsigned long lastLcdUpdate = 0;
+const unsigned long lcdUpdateInterval = 15000; // Aktualizacja LCD co 15s
 
 unsigned long lastSensorRead = 0;
 const unsigned long sensorInterval = 30000; // Odczyt czujników co 30s
@@ -230,6 +238,61 @@ int dublinSeconds() {
 // DEPRECATED - zachowane dla kompatybilności, przekierowanie do nowych funkcji
 int getDublinHours() { return dublinHours(); }
 int getDublinMinutes() { return dublinMinutes(); }
+
+// ===== FUNKCJE LCD =====
+void initLCD() {
+  DBG.println("DBG: Initializing I2C (Wire)...");
+  Wire.begin();
+
+  DBG.println("DBG: Probing LCD at 0x27...");
+  Wire.beginTransmission(0x27);
+  byte error = Wire.endTransmission();
+
+  if (error != 0) {
+    lcdAvailable = false;
+    DBG.println("DBG: LCD not found at 0x27");
+    return;
+  }
+
+  DBG.println("DBG: LCD found at 0x27, init...");
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0,0); lcd.print("Stairs System");
+  lcd.setCursor(0,1); lcd.print("Starting...");
+  lcdAvailable = true;
+
+  DBG.println("DBG: LCD init OK");
+}
+
+void updateLCD() {
+  if (!lcdAvailable) return;
+  
+  // Pierwsza linia: czas (HH:MM)
+  lcd.setCursor(0, 0);
+  char timeStr[17];
+  int h = dublinHours();
+  int m = dublinMinutes();
+  snprintf(timeStr, sizeof(timeStr), "Time: %02d:%02d     ", h, m);
+  lcd.print(timeStr);
+  
+  // Druga linia: adres IP
+  lcd.setCursor(0, 1);
+  if (WiFi.status() == WL_CONNECTED) {
+    IPAddress ip = WiFi.localIP();
+    char ipStr[17];
+    snprintf(ipStr, sizeof(ipStr), "IP:%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+    lcd.print(ipStr);
+    // Wypełnij resztę spacjami aby wyczyścić poprzednią zawartość
+    for (int i = strlen(ipStr); i < 16; i++) {
+      lcd.print(" ");
+    }
+  } else {
+    lcd.print("No WiFi         ");
+  }
+}
+
+// ===== SETUP =====
 int getDublinSeconds() { return dublinSeconds(); }
 
 // ===== SETUP =====
@@ -263,6 +326,10 @@ void setup() {
   digitalWrite(LED_GREEN, HIGH);  // Wyłącz zieloną
   digitalWrite(LED_BLUE, HIGH);   // Wyłącz niebieską
   DBG.println("DBG: RGB LEDs initialized (all OFF)");
+  
+  // Inicjalizacja LCD
+  DBG.println("\nDBG: Initializing LCD...");
+  initLCD();
   
   // Inicjalizacja WS2812
   DBG.println("\nDBG: Initializing WS2812...");
@@ -349,9 +416,9 @@ void loop() {
   }
   mqttClient.loop();
   
-  // Aktualizuj czas z NTP - throttling co 30s
+  // Aktualizuj czas z NTP - throttling co 15s
   static unsigned long lastNtpUpdate = 0;
-  if (now - lastNtpUpdate >= 30000 || lastNtpUpdate == 0) {
+  if (now - lastNtpUpdate >= 15000 || lastNtpUpdate == 0) {
     lastNtpUpdate = now;
     timeClient.update();
     DBG.println("DBG: NTP time updated");
@@ -396,6 +463,12 @@ void loop() {
       publishNTPTime();
       publishLightStatus();
     }
+  }
+  
+  // Aktualizacja LCD co 1s
+  if (now - lastLcdUpdate >= lcdUpdateInterval) {
+    lastLcdUpdate = now;
+    updateLCD();
   }
   
   // Informacja o działającym programie

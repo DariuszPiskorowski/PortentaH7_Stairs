@@ -75,6 +75,27 @@
 - Pin 2: Data (żółty)  
 - Pin 3: VCC (czerwony)
 
+### 4. Portenta H7 → LCD 1602 I2C
+
+| Portenta Pin | Połączenie | LCD Pin | Notatki |
+|--------------|-----------|---------|---------||
+| **D11 (SDA)** | ───────→ | **SDA** | Linia danych I2C |
+| **D12 (SCL)** | ───────→ | **SCL** | Linia zegara I2C |
+| **3.3V lub 5V** | ───────→ | **VCC** | Zasilanie (sprawdź moduł I2C) |
+| **GND** | ───────→ | **GND** | Masa |
+
+📝 **LCD 1602 I2C**:
+- Adres I2C: **0x27** (domyślnie, może być 0x3F)
+- Wyświetlacz: 16 znaków × 2 wiersze
+- Interfejs: I2C (PCF8574 lub podobny)
+- Podświetlenie: Niebieskie (sterowane przez I2C)
+
+🔌 **Uwagi**:
+- Niektóre moduły I2C mają wbudowane level shiftery i działają z 3.3V i 5V
+- Sprawdź dokumentację swojego modułu przed podłączeniem
+- Jeśli LCD nie działa, spróbuj adresy 0x27 lub 0x3F
+- System działa bez LCD jeśli nie jest podłączone
+
 ## Lista Materiałów (BOM)
 
 ### Komponenty Główne
@@ -83,7 +104,8 @@
 |-------|--------------------|--------------------------|
 | 1 | Arduino Portenta H7    | M7+M4 core               |
 | 1 | Listwa LED WS2812      | 60 LED/m, 4m (240 LEDs)  |
-| 1 | Czujnik DHT22          | Temperatura + Wilgotność |
+| 1 | LCD 1602 I2C           | 16x2 znaków, adres 0x27 |
+| 1 | Czujnik DHT11 lub DHT22| Temperatura + Wilgotność |
 | 1 | Czujnik DS18B20        | Temperatura wodoodporna  |
 | 1 | Zasilacz 5V            | 15A (75W)                | 
 | 1 | Rezystor 10kΩ          | ¼W                       | 
@@ -109,8 +131,9 @@
 
 ### Długość Przewodów
 - **Sygnał danych do WS2812**: Max 3-5m (powyżej użyj level shiftera 3.3V→5V)
-- **DHT22**: Max 20m
+- **DHT11/DHT22**: Max 20m
 - **DS18B20**: Max 100m (na kablu ekranowanym)
+- **I2C (LCD)**: Max 1m (bez wzmacniacza I2C)
 
 ### Ochrona
 - Kondensator 1000µF przy wejściu zasilania listwy LED
@@ -119,9 +142,10 @@
 
 ### Montaż na Schodach
 
-- Listwa LED montowana wzdluz schodow
+- Listwa LED montowana wzdluż schodów
 - Portenta montowana w dolnej części schodów (łatwy dostęp)
-- Czujniki DHT22 i DS18B20 w pobliżu Portenty
+- LCD montowane w widocznym miejscu (opcjonalnie)
+- Czujniki DHT i DS18B20 w pobliżu Portenty
 
 ## Testowanie
 
@@ -141,7 +165,7 @@ strip.fill(strip.Color(255, 0, 0));
 strip.show();
 ```
 
-### Krok 3: Test DHT22
+### Krok 3: Test DHT11/DHT22
 ```cpp
 // Odczytaj temperaturę
 float t = dht.readTemperature();
@@ -156,7 +180,16 @@ float t = ds18b20.getTempCByIndex(0);
 Serial.println(t);
 ```
 
-### Krok 5: Test WiFi i MQTT
+### Krok 5: Test LCD I2C
+```cpp
+// Wyświetl tekst
+lcd.init();
+lcd.backlight();
+lcd.setCursor(0, 0);
+lcd.print("Hello World!");
+```
+
+### Krok 6: Test WiFi i MQTT
 ```cpp
 // Sprawdź połączenie
 Serial.println(WiFi.localIP());
@@ -170,8 +203,10 @@ Serial.println(mqttClient.connected());
 | LEDy nie świecą | Brak zasilania 5V | Sprawdź zasilacz i połączenia |
 | LEDy migają chaotycznie | Słabe połączenie danych | Dodaj rezystor 330Ω, skróć przewód |
 | Losowe kolory | Brak wspólnego GND | Połącz GND Portenty i zasilacza |
-| DHT22 zwraca NaN | Brak pull-up lub zły pin | Sprawdź rezystor 10kΩ |
+| DHT11/DHT22 zwraca NaN | Brak pull-up lub zły pin | Sprawdź rezystor 10kΩ |
 | DS18B20 zwraca -127°C | Brak pull-up lub zły pin | Sprawdź rezystor 4.7kΩ |
+| LCD nie wyświetla | Zły adres I2C | Spróbuj 0x27 lub 0x3F, użyj skanera I2C |
+| LCD wyświetla krzaki | Błędny kontrast | Dostosuj potencjometr na module I2C |
 | Portenta się restartuje | Zbyt mały zasilacz | Użyj osobnego zasilania dla LEDów |
 
 ## Bezpieczeństwo
@@ -185,4 +220,4 @@ Serial.println(mqttClient.connected());
 
 ---
 
-**Ostatnia aktualizacja**: Styczeń 2026
+**Ostatnia aktualizacja**: Luty 2026
