@@ -1,14 +1,14 @@
 
 #include <WiFi.h>
+#include <mbed.h>
 #include <PubSubClient.h>
 #include <Adafruit_NeoPixel.h>
-// TYMCZASOWO ZAKOMENTOWANE - TESTOWANIE CZUJNIKÓW
-#include <DHT.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <time.h>
+#include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
 // Definicja portu debugowania dla Portenta H7
@@ -20,63 +20,37 @@
 #define LED_BLUE  LEDB
 
 // Wymagane makra konfiguracyjne (przekazywane np. przez -D w arduino-cli / CI)
-#ifndef WIFI_SSID_PRIMARY
-#error "WIFI_SSID_PRIMARY not defined"
-#endif
-// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
-//#define WIFI_SSID_PRIMARY "YourPrimarySSID"
+#define WIFI_SSID_PRIMARY "eir-JPP"
 
-#ifndef WIFI_SSID_FALLBACK
-#error "WIFI_SSID_FALLBACK not defined"
-#endif
-// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
-//#define WIFI_SSID_FALLBACK "YourFallbackSSID"
+#define WIFI_SSID_FALLBACK "JPP2"
 
-#ifndef WIFI_PASSWORD
-#error "WIFI_PASSWORD not defined"
-#endif
-// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
-//#define WIFI_PASSWORD "YourWiFiPassword"
+#define WIFI_PASSWORD_PRIMARY "**********"
+#define WIFI_PASSWORD_FALLBACK "**********"
 
-#ifndef MQTT_SERVER
-#error "MQTT_SERVER not defined"
-#endif
-// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
-//#define MQTT_SERVER "your.mqtt.server"
+#define MQTT_SERVER "192.168.1.109"
 
-#ifndef MQTT_USER
-#error "MQTT_USER not defined"
-#endif
-// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
-//#define MQTT_USER "your_mqtt_username"
+#define MQTT_USER "sonixh"
 
-#ifndef MQTT_PASSWORD
-#error "MQTT_PASSWORD not defined"
-#endif
-// lub zakomentuj powyzsze ifndef a odkomentuj ponizsze jesli nie uzywasz secrets z githuba:
-//#define MQTT_PASSWORD "your_mqtt_password"
+#define MQTT_PASSWORD "*****"
+
+
 
 
 // ===== KONFIGURACJA PINÓW =====
 // Portenta H7 używa numeracji GPIO (0-14) zgodnej z Arduino API
 #define LED_PIN           D6       // WS2812 Data Pin 7
-#define DHT_PIN           D5       // DHT11/DHT22 Pin 22 PWM1 (auto-detekcja)
 #define DS18B20_PIN       D1       // DS18B20 Pin 26  PWM2
 
-// ===== KONFIGURACJA CZUJNIKÓW =====
-// Ustaw FORCE_DHT_TYPE aby wymusić typ czujnika DHT i pominąć auto-detekcję
-// Opcje: 0 = auto-detekcja (default), 11 = wymuszenie DHT11, 22 = wymuszenie DHT22
-#define FORCE_DHT_TYPE 0  // 0=auto, 11=DHT11, 22=DHT22
-
 // ===== KONFIGURACJA WS2812 =====
-#define NUM_LEDS          240     // Całkowita liczba LEDów
-#define NUM_STAIRS        13      // Liczba stopni
+#define NUM_LEDS          258     // Całkowita liczba LEDów
+#define NUM_STAIRS        14      // Liczba stopni
 #define LEDS_PER_STAIR    18      // 240/13 ≈ 18 LEDów na stopień
 
 // ===== KONFIGURACJA WIFI =====
 const char* ssid1 = WIFI_SSID_PRIMARY;
 const char* ssid2 = WIFI_SSID_FALLBACK;
-const char* password = WIFI_PASSWORD;
+const char* password1 = WIFI_PASSWORD_PRIMARY;
+const char* password2 = WIFI_PASSWORD_FALLBACK;
 
 // ===== KONFIGURACJA MQTT =====
 const char* mqtt_server = MQTT_SERVER;
@@ -85,14 +59,14 @@ const char* mqtt_user = MQTT_USER;
 const char* mqtt_password = MQTT_PASSWORD;
 
 const char* mqtt_topic_input = "Stairs/Light/input";
-const char* mqtt_topic_output = "Stairs/Light/output";
-const char* mqtt_topic_led_status = "Stairs/Light/status"; // Stan LEDów
-const char* mqtt_topic_temp_dht = "Stairs/DHT/Temperature";
-const char* mqtt_topic_humidity = "Stairs/DHT/Humidity";
-const char* mqtt_topic_temp_ds = "Stairs/Temperature/DS18B20";
-const char* mqtt_topic_time = "Stairs/Time"; // NTP time
-const char* device_name = "Stairs"; // Identyfikacja w sieci/MQTT
-const char* device_hostname = "Stairs"; // Nazwa hosta widoczna w DHCP/skanowaniu sieci
+const char* mqtt_topic_output = "Portenta2/Light/output";
+const char* mqtt_topic_led_status = "Portenta2/status";//"Stairs/Light/status"; // Stan LEDów
+const char* mqtt_topic_temp_ds = "HallDown/Temperature/temperature";
+const char* mqtt_topic_time = "Portenta2/Time"; // NTP time
+const char* mqtt_topic_watchdog_reboot = "Portenta/Watchdog/reboot";
+const char* mqtt_topic_watchdog_status = "Portenta/Watchdog/status";
+const char* device_name = "PortentaH7_id"; // Identyfikacja w sieci/MQTT
+const char* device_hostname = "PortentaH7_host"; // Nazwa hosta widoczna w DHCP/skanowaniu sieci
 
 // ===== TRYBY OŚWIETLENIA =====
 enum LightMode {
@@ -105,10 +79,6 @@ enum LightMode {
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
-// DHT - dwa obiekty + wskaźnik do aktywnego (auto-detekcja w initSensors)
-DHT dht11(DHT_PIN, DHT11);
-DHT dht22(DHT_PIN, DHT22);
-DHT* dhtPtr = &dht11; // Wskaźnik do aktywnego czujnika
 OneWire oneWire(DS18B20_PIN);
 DallasTemperature ds18b20(&oneWire);
 WiFiUDP ntpUDP;
@@ -134,13 +104,145 @@ const unsigned long wifiPublishInterval = 30000; // Publikacja WiFi/Time co 30s
 unsigned long lastModeCheck = 0;
 const unsigned long modeCheckInterval = 10000; // Sprawdzanie trybu co 10s
 unsigned long lastLcdUpdate = 0;
-const unsigned long lcdUpdateInterval = 15000; // Aktualizacja LCD co 15s
+const unsigned long lcdUpdateInterval = 10000; // Aktualizacja LCD co 10s
+unsigned long lastLcdReinit = 0;
+const unsigned long lcdReinitInterval = 60UL * 60UL * 1000UL;
 
 unsigned long lastSensorRead = 0;
 const unsigned long sensorInterval = 30000; // Odczyt czujników co 30s
-bool dhtAvailable = false;
-int dhtType = DHT11; // Wykryty typ czujnika (DHT11 lub DHT22)
 bool ds18b20Available = false;
+
+// ===== WATCHDOG I AUTOMATYCZNE ODZYSKIWANIE =====
+mbed::Watchdog& hardwareWatchdog = mbed::Watchdog::get_instance();
+bool hardwareWatchdogStarted = false;
+uint32_t hardwareWatchdogTimeoutMs = 0;
+const uint32_t requestedHardwareWatchdogTimeoutMs = 30000UL;
+
+const unsigned long connectivityResetTimeout = 5UL * 60UL * 1000UL;
+unsigned long wifiFailureSince = 0;
+unsigned long mqttFailureSince = 0;
+bool pendingRemoteReboot = false;
+
+// ===== STAN ŁĄCZNOŚCI =====
+bool ntpTimeValid = false;
+unsigned long lastWifiReconnectAttempt = 0;
+const unsigned long wifiReconnectInterval = 10000UL;
+const unsigned long wifiConnectTimeout = 15000UL;
+
+bool isZeroIP(const IPAddress& ip) {
+  return ip[0] == 0 && ip[1] == 0 && ip[2] == 0 && ip[3] == 0;
+}
+
+bool wifiReady() {
+  return WiFi.status() == WL_CONNECTED && !isZeroIP(WiFi.localIP());
+}
+
+bool mqttTopicConfigured(const char* topic) {
+  return topic != nullptr && topic[0] != '\0';
+}
+
+bool safeMqttPublish(const char* topic, const char* payload, bool retained = false) {
+  if (!mqttClient.connected()) return false;
+  if (!mqttTopicConfigured(topic)) {
+    DBG.println("DBG: MQTT publish skipped - empty topic");
+    return false;
+  }
+  return mqttClient.publish(topic, payload, retained);
+}
+
+void kickHardwareWatchdog() {
+  if (hardwareWatchdogStarted) {
+    hardwareWatchdog.kick();
+  }
+}
+
+void startHardwareWatchdog() {
+  if (hardwareWatchdog.is_running()) {
+    hardwareWatchdogStarted = true;
+    hardwareWatchdogTimeoutMs = hardwareWatchdog.get_timeout();
+    hardwareWatchdog.kick();
+    DBG.print("DBG: Hardware watchdog already running, timeout=");
+    DBG.print(hardwareWatchdogTimeoutMs);
+    DBG.println(" ms");
+    return;
+  }
+
+  const uint32_t maxTimeout = hardwareWatchdog.get_max_timeout();
+  hardwareWatchdogTimeoutMs = requestedHardwareWatchdogTimeoutMs;
+  if (maxTimeout > 0 && hardwareWatchdogTimeoutMs > maxTimeout) {
+    hardwareWatchdogTimeoutMs = maxTimeout;
+  }
+
+  if (hardwareWatchdogTimeoutMs < 5000UL) {
+    DBG.println("DBG: Hardware watchdog not started - supported timeout is too short");
+    return;
+  }
+
+  hardwareWatchdogStarted = hardwareWatchdog.start(hardwareWatchdogTimeoutMs);
+  DBG.print("DBG: Hardware watchdog: ");
+  DBG.print(hardwareWatchdogStarted ? "STARTED, timeout=" : "FAILED, requested timeout=");
+  DBG.print(hardwareWatchdogTimeoutMs);
+  DBG.println(" ms");
+}
+
+void serviceDelay(unsigned long durationMs) {
+  const unsigned long started = millis();
+  while (millis() - started < durationMs) {
+    if (mqttClient.connected()) mqttClient.loop();
+    kickHardwareWatchdog();
+    delay(5);
+  }
+}
+
+void performSystemReset(const char* reason, bool publishRemoteStatus) {
+  DBG.print("RESET: ");
+  DBG.println(reason);
+
+  if (publishRemoteStatus && mqttClient.connected()) {
+    // Usuwa ewentualną retained komendę, aby nie utworzyć pętli restartów.
+    mqttClient.publish(mqtt_topic_watchdog_reboot, "", true);
+    mqttClient.publish(mqtt_topic_watchdog_status, "rebooting_remote", true);
+    serviceDelay(500);
+
+    // Rozłączenie kontrolowane zachowuje retained status rebooting_remote.
+    mqttClient.disconnect();
+    espClient.stop();
+    delay(50);
+  }
+
+  NVIC_SystemReset();
+  while (true) { }
+}
+
+void checkConnectivityRecovery(unsigned long now) {
+  if (!wifiReady()) {
+    mqttFailureSince = 0;
+    if (wifiFailureSince == 0) wifiFailureSince = (now == 0 ? 1 : now);
+
+    if (now - wifiFailureSince >= connectivityResetTimeout) {
+      performSystemReset("WiFi unavailable for 5 minutes", false);
+    }
+    return;
+  }
+
+  wifiFailureSince = 0;
+
+  if (!mqttClient.connected()) {
+    if (mqttFailureSince == 0) mqttFailureSince = (now == 0 ? 1 : now);
+
+    if (now - mqttFailureSince >= connectivityResetTimeout) {
+      performSystemReset("MQTT unavailable for 5 minutes", false);
+    }
+  } else {
+    mqttFailureSince = 0;
+  }
+}
+
+void processPendingRemoteReboot() {
+  if (!pendingRemoteReboot) return;
+  pendingRemoteReboot = false;
+  performSystemReset("remote MQTT command", true);
+}
 
 // ===== FUNKCJE POMOCNICZE =====
 // Wylicza środek stopnia, rozdzielając równomiernie 240 LEDów na 13 stopni
@@ -271,14 +373,18 @@ void updateLCD() {
   // Pierwsza linia: czas (HH:MM)
   lcd.setCursor(0, 0);
   char timeStr[17];
-  int h = dublinHours();
-  int m = dublinMinutes();
-  snprintf(timeStr, sizeof(timeStr), "Time: %02d:%02d     ", h, m);
+  if (ntpTimeValid) {
+    int h = dublinHours();
+    int m = dublinMinutes();
+    snprintf(timeStr, sizeof(timeStr), "Time: %02d:%02d     ", h, m);
+  } else {
+    snprintf(timeStr, sizeof(timeStr), "Time: --:--     ");
+  }
   lcd.print(timeStr);
   
   // Druga linia: adres IP
   lcd.setCursor(0, 1);
-  if (WiFi.status() == WL_CONNECTED) {
+  if (wifiReady()) {
     IPAddress ip = WiFi.localIP();
     char ipStr[17];
     snprintf(ipStr, sizeof(ipStr), "IP:%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
@@ -287,6 +393,8 @@ void updateLCD() {
     for (int i = strlen(ipStr); i < 16; i++) {
       lcd.print(" ");
     }
+  } else if (WiFi.status() == WL_CONNECTED) {
+    lcd.print("WiFi DHCP...    ");
   } else {
     lcd.print("No WiFi         ");
   }
@@ -326,15 +434,22 @@ void setup() {
   digitalWrite(LED_GREEN, HIGH);  // Wyłącz zieloną
   digitalWrite(LED_BLUE, HIGH);   // Wyłącz niebieską
   DBG.println("DBG: RGB LEDs initialized (all OFF)");
+
+  // Sprzętowy watchdog chroni przed całkowitym zawieszeniem programu.
+  startHardwareWatchdog();
+  kickHardwareWatchdog();
   
   // Inicjalizacja LCD
   DBG.println("\nDBG: Initializing LCD...");
   initLCD();
+  lastLcdReinit = millis();
   
   // Inicjalizacja WS2812
   DBG.println("\nDBG: Initializing WS2812...");
   strip.begin();
   strip.clear();
+  strip.show();
+  delay(5); // Powtorz te sama ramke po przerwie.
   strip.show();
   DBG.print("DBG: WS2812 Initialized - ");
   DBG.print(NUM_LEDS);
@@ -342,11 +457,10 @@ void setup() {
   DBG.print(NUM_STAIRS);
   DBG.println(" stairs");
   
-  // Inicjalizacja czujników
-  DBG.println("DBG: Initializing sensors...");
-  initSensors();
-  DBG.println("DBG: Sensors initialized");
-  
+  // Diagnostyka modułu WiFi
+  DBG.print("DBG: WiFi firmware version: ");
+  DBG.println(WiFi.firmwareVersion());
+
   // Połączenie WiFi
   DBG.println("DBG: Starting WiFi connection...");
   connectWiFi();
@@ -356,7 +470,9 @@ void setup() {
   mqttClient.setServer(mqtt_server, mqtt_port);
   mqttClient.setCallback(mqttCallback);
   mqttClient.setBufferSize(512);
-  DBG.println("DBG: MQTT client configured");
+  mqttClient.setKeepAlive(30);
+  mqttClient.setSocketTimeout(4);
+  DBG.println("DBG: MQTT client configured (keepalive=30s, socket timeout=4s)");
   
   // Uruchomienie NTP
   DBG.println("\nDBG: Starting NTP client...");
@@ -366,7 +482,9 @@ void setup() {
   DBG.println("DBG: timeClient.setTimeOffset(0) - WYMUSZONY UTC, offset ZAWSZE = 0");
   DBG.println("DBG: DST obliczany TYLKO ręcznie w currentTimeOffsetSeconds");
   DBG.println("DBG: Updating time from NTP server...");
-  timeClient.update();
+  ntpTimeValid = wifiReady() && timeClient.forceUpdate();
+  DBG.print("DBG: Initial NTP update: ");
+  DBG.println(ntpTimeValid ? "SUCCESS" : "FAILED");
   DBG.print("DBG: Current time (UTC): ");
   DBG.print(timeClient.getHours());
   DBG.print(":");
@@ -377,36 +495,63 @@ void setup() {
   // INICJALIZACJA DST - oblicz offset ZARAZ PO STARCIE
   DBG.println("DBG: Initializing DST offset...");
   unsigned long utc = utcEpoch();
-  currentTimeOffsetSeconds = getDublinOffsetSeconds(utc);
+  currentTimeOffsetSeconds = ntpTimeValid ? getDublinOffsetSeconds(utc) : 0;
   DBG.print("DBG: Initial DST offset: ");
   DBG.print(currentTimeOffsetSeconds);
   DBG.print("s (");
   DBG.print(currentTimeOffsetSeconds / 3600);
   DBG.println("h)");
   DBG.print("DBG: Dublin time at startup: ");
-  DBG.print(dublinHours());
-  DBG.print(":");
-  if (dublinMinutes() < 10) DBG.print("0");
-  DBG.println(dublinMinutes());
+  if (ntpTimeValid) {
+    DBG.print(dublinHours());
+    DBG.print(":");
+    if (dublinMinutes() < 10) DBG.print("0");
+    DBG.println(dublinMinutes());
+  } else {
+    DBG.println("not available");
+  }
+
+  // Połącz MQTT zanim opcjonalne czujniki zaczną dłuższą inicjalizację.
+  if (wifiReady()) reconnectMQTT();
+
+  // Czujniki są funkcją dodatkową; ich problemy nie mogą opóźniać startu sieci.
+  DBG.println("DBG: Initializing sensors...");
+  initSensors();
+  DBG.println("DBG: Sensors initialized");
   
   DBG.println("==============================================");
+  kickHardwareWatchdog();
   DBG.println("=== Setup Complete - Entering Main Loop ===");
   DBG.println("==============================================\n");
 }
 
 // ===== MAIN LOOP =====
 void loop() {
+  kickHardwareWatchdog();
   unsigned long now = millis(); // Wspólna zmienna dla całej funkcji
+  // Odzyskiwanie LCD dziala rowniez bez polaczenia WiFi.
+  if (now - lastLcdReinit >= lcdReinitInterval) {
+    kickHardwareWatchdog();
+    initLCD();
+    updateLCD();
+    kickHardwareWatchdog();
+    now = millis();
+    lastLcdReinit = now;
+    lastLcdUpdate = now;
+  }
+  checkConnectivityRecovery(now);
   
-  // Utrzymuj połączenie WiFi
-  if (WiFi.status() != WL_CONNECTED) {
-    DBG.println("\nDBG: WiFi disconnected in loop, reconnecting...");
-    connectWiFi();
-    // Jeśli nadal brak WiFi, pomiń resztę iteracji
-    if (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      return;
+  // Utrzymuj połączenie WiFi. Samo WL_CONNECTED nie wystarcza:
+  // po zimnym starcie DHCP może jeszcze nie przydzielić adresu.
+  if (!wifiReady()) {
+    if (lastWifiReconnectAttempt == 0 || now - lastWifiReconnectAttempt >= wifiReconnectInterval) {
+      lastWifiReconnectAttempt = now;
+      DBG.println("\nDBG: WiFi not ready, reconnecting...");
+      connectWiFi();
     }
+    serviceDelay(50);
+    kickHardwareWatchdog();
+    return;
   }
   
   // Utrzymuj połączenie MQTT
@@ -414,19 +559,28 @@ void loop() {
     DBG.println("DBG: MQTT disconnected, reconnecting...");
     reconnectMQTT();
   }
-  mqttClient.loop();
+  if (mqttClient.connected() && !mqttClient.loop()) {
+    DBG.println("DBG: MQTT loop detected a lost connection");
+  }
+  processPendingRemoteReboot();
+  checkConnectivityRecovery(millis());
   
-  // Aktualizuj czas z NTP - throttling co 15s
+  // Aktualizuj czas z NTP - throttling co 30s
   static unsigned long lastNtpUpdate = 0;
-  if (now - lastNtpUpdate >= 15000 || lastNtpUpdate == 0) {
+  if (now - lastNtpUpdate >= 30000 || lastNtpUpdate == 0) {
     lastNtpUpdate = now;
-    timeClient.update();
-    DBG.println("DBG: NTP time updated");
+    const bool ntpUpdated = ntpTimeValid ? timeClient.update() : timeClient.forceUpdate();
+    if (ntpUpdated) {
+      ntpTimeValid = true;
+      DBG.println("DBG: NTP time updated");
+    } else {
+      DBG.println("DBG: NTP update failed; keeping previous state");
+    }
   }
   
   // Oblicz offset DST dla Dublina - TYLKO RAZ NA MINUTE (throttling)
   static unsigned long lastDSTCheck = 0;
-  if (now - lastDSTCheck >= 60000 || lastDSTCheck == 0) {
+  if (ntpTimeValid && (now - lastDSTCheck >= 60000 || lastDSTCheck == 0)) {
     lastDSTCheck = now;
     
     unsigned long utc = utcEpoch(); // Używamy nowej funkcji utcEpoch()
@@ -465,7 +619,7 @@ void loop() {
     }
   }
   
-  // Aktualizacja LCD co 1s
+  // Aktualizacja LCD co 10s
   if (now - lastLcdUpdate >= lcdUpdateInterval) {
     lastLcdUpdate = now;
     updateLCD();
@@ -476,7 +630,7 @@ void loop() {
   if (millis() - lastHeartbeat >= 10000) {
     lastHeartbeat = millis();
     DBG.println("\n=== Heartbeat ===");
-    DBG.println("DBG: WiFi connected, program running...");
+    DBG.println("DBG: Program running...");
     DBG.print("DBG: SSID: ");
     DBG.print(WiFi.SSID());
     DBG.print(" | IP: ");
@@ -505,331 +659,124 @@ void loop() {
     DBG.println("=================");
   }
   
-  delay(100);
+  kickHardwareWatchdog();
+  serviceDelay(100);
 }
 
-// ===== FUNKCJE POMOCNICZE DHT =====
-// Próbuje odczytać DHT kilka razy (DHT często zwraca NaN na pierwszym odczycie)
-bool tryReadDht(DHT& d, float& t, float& h) {
-  for (int i = 0; i < 5; i++) {
-    t = d.readTemperature();
-    h = d.readHumidity();
-    DBG.print("DBG:   Attempt ");
-    DBG.print(i + 1);
-    DBG.print("/5: temp=");
-    DBG.print(t);
-    DBG.print(" hum=");
-    DBG.println(h);
-    if (!isnan(t) && !isnan(h)) {
-      DBG.println("DBG:   SUCCESS - valid reading");
-      return true;
-    }
-    delay(300);
-  }
-  DBG.println("DBG:   FAILED - all attempts returned NaN");
-  return false;
-}
-
-// Walidacja zakresu dla DHT11 (0-50°C, 20-90% wilg.)
-bool plausibleDht11(float t, float h) {
-  return !isnan(t) && !isnan(h) && t >= 0 && t <= 55 && h >= 5 && h <= 99;
-}
-
-// Walidacja zakresu dla DHT22 (-40-80°C, 0-100% wilg.)
-bool plausibleDht22(float t, float h) {
-  return !isnan(t) && !isnan(h) && t >= -40 && t <= 80 && h >= 0 && h <= 100;
-}
-
-// ===== INICJALIZACJA CZUJNIKÓW =====
+// ===== INICJALIZACJA DS18B20 =====
 void initSensors() {
   DBG.println("DBG: ========================================");
-  DBG.println("DBG: Initializing all temperature sensors...");
+  DBG.println("DBG: Initializing DS18B20 temperature sensor");
+  DBG.println("DBG: DHT is disabled in this firmware");
   DBG.println("DBG: ========================================");
-  
-  // =============================================
-  // KROK 1: INICJALIZACJA DHT
-  // =============================================
-  float t, h;
-  dhtAvailable = false; // Start z założeniem braku czujnika
-  
-#if FORCE_DHT_TYPE == 11
-  // WYMUSZENIE DHT11 - bez auto-detekcji
-  DBG.println("DBG: [DHT] FORCED MODE: DHT11 (skipping auto-detection)");
-  dht11.begin();
-  delay(2000);
-  
-  if (tryReadDht(dht11, t, h) && plausibleDht11(t, h)) {
-    dhtPtr = &dht11;
-    dhtType = DHT11;
-    dhtAvailable = true;
-    DBG.print("DBG: [DHT] DHT11 initialized! temp=");
-    DBG.print(t);
-    DBG.print("°C hum=");
-    DBG.print(h);
-    DBG.println("%");
-  } else {
-    DBG.println("DBG: [DHT] *** FORCED DHT11 FAILED - check wiring ***");
-  }
-  
-#elif FORCE_DHT_TYPE == 22
-  // WYMUSZENIE DHT22 - bez auto-detekcji
-  DBG.println("DBG: [DHT] FORCED MODE: DHT22 (skipping auto-detection)");
-  dht22.begin();
-  delay(2000);
-  
-  if (tryReadDht(dht22, t, h) && plausibleDht22(t, h)) {
-    dhtPtr = &dht22;
-    dhtType = DHT22;
-    dhtAvailable = true;
-    DBG.print("DBG: [DHT] DHT22 initialized! temp=");
-    DBG.print(t);
-    DBG.print("°C hum=");
-    DBG.print(h);
-    DBG.println("%");
-  } else {
-    DBG.println("DBG: [DHT] *** FORCED DHT22 FAILED - check wiring ***");
-  }
-  
-#else
-  // AUTO-DETEKCJA (default)
-  DBG.println("DBG: [DHT] AUTO-DETECT MODE: Testing DHT11 first, then DHT22");
-  
-  // Próba 1: DHT11
-  DBG.println("DBG: [DHT] Trying DHT11...");
-  dht11.begin();
-  delay(2000);
-  
-  if (tryReadDht(dht11, t, h) && plausibleDht11(t, h)) {
-    dhtPtr = &dht11;
-    dhtType = DHT11;
-    dhtAvailable = true;
-    DBG.print("DBG: [DHT] DHT11 DETECTED! temp=");
-    DBG.print(t);
-    DBG.print("°C hum=");
-    DBG.print(h);
-    DBG.println("%");
-  } else {
-    // Próba 2: DHT22
-    DBG.println("DBG: [DHT] DHT11 failed, trying DHT22...");
-    dht22.begin();
-    delay(2000);
-    
-    if (tryReadDht(dht22, t, h) && plausibleDht22(t, h)) {
-      dhtPtr = &dht22;
-      dhtType = DHT22;
-      dhtAvailable = true;
-      DBG.print("DBG: [DHT] DHT22 DETECTED! temp=");
-      DBG.print(t);
-      DBG.print("°C hum=");
-      DBG.print(h);
-      DBG.println("%");
-    } else {
-      DBG.println("DBG: [DHT] *** NO DHT SENSOR DETECTED - will retry after 3 failed read cycles ***");
-    }
-  }
-#endif
-  
-  // =============================================
-  // KROK 2: INICJALIZACJA DS18B20 (ZAWSZE!)
-  // =============================================
-  // USUNIĘTO RETURN - DS18B20 inicjalizowany niezależnie od DHT
-  DBG.println("DBG: [DS18B20] Testing DS18B20 sensor...");
+
   ds18b20.begin();
-  delay(1000);
-  int deviceCount = ds18b20.getDeviceCount();
-  if (deviceCount > 0) {
-    ds18b20Available = true;
+  serviceDelay(250);
+
+  const int deviceCount = ds18b20.getDeviceCount();
+  ds18b20Available = deviceCount > 0;
+
+  if (ds18b20Available) {
     DBG.print("DBG: [DS18B20] OK - Found ");
     DBG.print(deviceCount);
     DBG.println(" device(s)");
   } else {
-    ds18b20Available = false;
-    DBG.println("DBG: [DS18B20] Not detected (will continue without it)");
+    DBG.println("DBG: [DS18B20] Not detected; will retry after failed cycles");
   }
-  
-  // =============================================
-  // PODSUMOWANIE
-  // =============================================
-  DBG.println("DBG: ========================================");
-  DBG.print("DBG: Sensor initialization complete: DHT=");
-  DBG.print(dhtAvailable ? "YES" : "NO");
-  if (dhtAvailable) {
-    DBG.print(" (");
-    DBG.print(dhtType == DHT11 ? "DHT11" : "DHT22");
-    DBG.print(")");
-  }
-  DBG.print(" DS18B20=");
-  DBG.println(ds18b20Available ? "YES" : "NO");
-  DBG.println("DBG: ========================================");
 }
 
 // ===== POŁĄCZENIE WiFi =====
+bool connectToSSID(const char* ssid, const char* pass) {
+  if (ssid == nullptr || ssid[0] == '\0') return false;
+
+  DBG.print("DBG: Connecting to SSID: ");
+  DBG.println(ssid);
+
+  // Zatrzymaj stare gniazda i poprzednią próbę połączenia.
+  mqttClient.disconnect();
+  espClient.stop();
+  WiFi.disconnect();
+  serviceDelay(300);
+
+  digitalWrite(LED_GREEN, HIGH);
+  digitalWrite(LED_BLUE, LOW);
+
+  WiFi.begin(ssid, pass);
+  const unsigned long started = millis();
+  unsigned long lastLog = 0;
+
+  while (millis() - started < wifiConnectTimeout) {
+    kickHardwareWatchdog();
+    const int status = WiFi.status();
+    const IPAddress ip = WiFi.localIP();
+
+    // Dopiero po uzyskaniu niezerowego adresu DHCP uznajemy sieć za gotową.
+    if (status == WL_CONNECTED && !isZeroIP(ip)) {
+      digitalWrite(LED_BLUE, HIGH);
+      digitalWrite(LED_GREEN, LOW);
+
+      DBG.println("DBG: WiFi and DHCP ready");
+      DBG.print("DBG: SSID: "); DBG.println(WiFi.SSID());
+      DBG.print("DBG: IP: "); DBG.println(ip);
+      DBG.print("DBG: Gateway: "); DBG.println(WiFi.gatewayIP());
+      DBG.print("DBG: DNS: "); DBG.println(WiFi.dnsIP());
+      DBG.print("DBG: RSSI: "); DBG.print(WiFi.RSSI()); DBG.println(" dBm");
+      return true;
+    }
+
+    if (millis() - lastLog >= 1000) {
+      lastLog = millis();
+      DBG.print("DBG: Waiting for WiFi/DHCP, status=");
+      DBG.print(status);
+      DBG.print(" IP=");
+      DBG.println(ip);
+      digitalWrite(LED_BLUE, !digitalRead(LED_BLUE));
+    }
+    serviceDelay(100);
+  }
+
+  DBG.println("DBG: WiFi/DHCP timeout");
+  WiFi.disconnect();
+  digitalWrite(LED_BLUE, HIGH);
+  digitalWrite(LED_GREEN, HIGH);
+  return false;
+}
+
 void connectWiFi() {
   DBG.println("\n======================================");
   DBG.println("DBG: Starting WiFi connection process");
   DBG.println("======================================");
-  
-  DBG.print("DBG: STEP 1 - Setting hostname: ");
+
+  DBG.print("DBG: Setting hostname: ");
   DBG.println(device_hostname);
 #if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_PORTENTA_H7_M7) || defined(ARDUINO_PORTENTA_H7_M4)
   WiFi.setHostname(device_hostname);
-  DBG.println("DBG: Hostname set successfully");
-#else
-  DBG.println("DBG: Hostname not supported on this platform");
 #endif
-  
-  DBG.println("\nDBG: STEP 2 - Attempting connection to primary network");
-  DBG.print("DBG: SSID: ");
-  DBG.println(ssid1);
-  DBG.print("DBG: Password length: ");
-  DBG.println(strlen(password));
-  
-  // Zapal niebieską LED - rozpoczęcie łączenia
-  DBG.println("DBG: Turning ON BLUE LED (connecting...)");
-  digitalWrite(LED_BLUE, LOW);  // LOW = świeci
-  
-  DBG.println("DBG: Calling WiFi.begin()...");
-  WiFi.begin(ssid1, password);
-  delay(100);
-  DBG.println("DBG: WiFi.begin() called, waiting for connection...");
-  
-  // Próba połączenia z pierwszą siecią
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 10) {
-    // Miganie niebieską LED podczas łączenia
-    digitalWrite(LED_BLUE, !digitalRead(LED_BLUE));
-    delay(250);
-    
-    DBG.print("DBG: Attempt ");
-    DBG.print(attempts + 1);
-    DBG.print("/10 - WiFi status: ");
-    DBG.print(WiFi.status());
-    DBG.print(" (");
-    switch(WiFi.status()) {
-      case WL_IDLE_STATUS: DBG.print("IDLE"); break;
-      case WL_NO_SSID_AVAIL: DBG.print("NO_SSID_AVAILABLE"); break;
-      case WL_SCAN_COMPLETED: DBG.print("SCAN_COMPLETED"); break;
-      case WL_CONNECTED: DBG.print("CONNECTED"); break;
-      case WL_CONNECT_FAILED: DBG.print("CONNECT_FAILED"); break;
-      case WL_CONNECTION_LOST: DBG.print("CONNECTION_LOST"); break;
-      case WL_DISCONNECTED: DBG.print("DISCONNECTED"); break;
-      default: DBG.print("UNKNOWN"); break;
-    }
-    DBG.println(")");
-    
-    attempts++;
-  }
-  
-  // Jeśli nie udało się, próbuj drugiej sieci
-  if (WiFi.status() != WL_CONNECTED) {
-    DBG.println("\n======================================");
-    DBG.println("DBG: STEP 3 - Primary network failed!");
-    DBG.println("DBG: Trying alternative network...");
-    DBG.println("======================================");
-    DBG.print("DBG: Alternative SSID: ");
-    DBG.println(ssid2);
-    
-    DBG.println("DBG: Calling WiFi.begin() for alternative network...");
-    WiFi.begin(ssid2, password);
-    delay(100);
-    DBG.println("DBG: WiFi.begin() called, waiting for connection...");
-    
-    attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 10) {
-      // Kontynuuj miganie niebieską LED
-      digitalWrite(LED_BLUE, !digitalRead(LED_BLUE));
-      delay(250);
-      
-      DBG.print("DBG: Attempt ");
-      DBG.print(attempts + 1);
-      DBG.print("/10 - WiFi status: ");
-      DBG.print(WiFi.status());
-      DBG.print(" (");
-      switch(WiFi.status()) {
-        case WL_IDLE_STATUS: DBG.print("IDLE"); break;
-        case WL_NO_SSID_AVAIL: DBG.print("NO_SSID_AVAILABLE"); break;
-        case WL_SCAN_COMPLETED: DBG.print("SCAN_COMPLETED"); break;
-        case WL_CONNECTED: DBG.print("CONNECTED"); break;
-        case WL_CONNECT_FAILED: DBG.print("CONNECT_FAILED"); break;
-        case WL_CONNECTION_LOST: DBG.print("CONNECTION_LOST"); break;
-        case WL_DISCONNECTED: DBG.print("DISCONNECTED"); break;
-        default: DBG.print("UNKNOWN"); break;
-      }
-      DBG.println(")");
-      
-      attempts++;
-    }
-  }
-  
-  DBG.println("\n======================================");
-  DBG.println("DBG: STEP 4 - Connection Result");
-  DBG.println("======================================");
-  
-  if (WiFi.status() == WL_CONNECTED) {
-    // Zgaś niebieską LED i zapal zieloną
-    digitalWrite(LED_BLUE, HIGH);   // Zgaś niebieską
-    digitalWrite(LED_GREEN, LOW);   // Zapal zieloną (LOW = świeci)
-    
-    DBG.println("\n*** WiFi Connected Successfully! ***");
-    DBG.println("DBG: GREEN LED turned ON");
-    DBG.println("\nDBG: Connection Details:");
-    DBG.print("DBG:   - SSID: ");
-    DBG.println(WiFi.SSID());
-    DBG.print("DBG:   - IP Address: ");
-    DBG.println(WiFi.localIP());
-    DBG.print("DBG:   - MAC Address: ");
-    DBG.println(WiFi.macAddress());
-    DBG.print("DBG:   - Signal Strength (RSSI): ");
-    DBG.print(WiFi.RSSI());
-    DBG.println(" dBm");
-    DBG.print("DBG:   - Gateway: ");
-    DBG.println(WiFi.gatewayIP());
-    DBG.print("DBG:   - Subnet Mask: ");
-    DBG.println(WiFi.subnetMask());
-    DBG.print("DBG:   - DNS: ");
-    DBG.println(WiFi.dnsIP());
-    
-    DBG.println("======================================\n");
-    
-    // ZAKOMENTOWANE - TESTOWANIE WIFI
-    // // Publikuj info o WiFi przez MQTT (po połączeniu z brokerem)
-    // delay(100); // Krótkie opóźnienie przed publikacją
-  } else {
-    // Zgaś niebieską LED
-    digitalWrite(LED_BLUE, HIGH);
-    
-    DBG.println("\n*** WiFi Connection FAILED! ***");
-    DBG.println("DBG: Connection failed after all attempts");
-    DBG.print("DBG: Final WiFi status: ");
-    DBG.print(WiFi.status());
-    DBG.print(" (");
-    switch(WiFi.status()) {
-      case WL_IDLE_STATUS: DBG.print("IDLE"); break;
-      case WL_NO_SSID_AVAIL: DBG.print("NO_SSID_AVAILABLE"); break;
-      case WL_SCAN_COMPLETED: DBG.print("SCAN_COMPLETED"); break;
-      case WL_CONNECTED: DBG.print("CONNECTED"); break;
-      case WL_CONNECT_FAILED: DBG.print("CONNECT_FAILED"); break;
-      case WL_CONNECTION_LOST: DBG.print("CONNECTION_LOST"); break;
-      case WL_DISCONNECTED: DBG.print("DISCONNECTED"); break;
-      default: DBG.print("UNKNOWN"); break;
-    }
-    DBG.println(")");
-    DBG.println("DBG: Will retry in next loop iteration");
-    DBG.println("======================================\n");
-  }
+
+  if (connectToSSID(ssid1, password1)) return;
+
+  DBG.println("DBG: Primary network failed; trying fallback");
+  if (connectToSSID(ssid2, password2)) return;
+
+  DBG.println("DBG: No WiFi network is ready; next retry in 10 seconds");
 }
 
 // ===== PUBLIKACJA CZASU NTP =====
 void publishNTPTime() {
   DBG.println("DBG: publishNTPTime() called");
   
-  if (WiFi.status() != WL_CONNECTED) {
+  if (!wifiReady()) {
     DBG.println("DBG: WiFi not connected, skipping time publish");
     return;
   }
   
   if (!mqttClient.connected()) {
     DBG.println("DBG: MQTT not connected, skipping time publish");
+    return;
+  }
+
+  if (!ntpTimeValid) {
+    DBG.println("DBG: NTP time is not valid yet, skipping time publish");
     return;
   }
   
@@ -850,7 +797,7 @@ void publishNTPTime() {
   DBG.print("DBG: Message: ");
   DBG.println(timeInfo);
   
-  bool result = mqttClient.publish(mqtt_topic_time, timeInfo.c_str());
+  bool result = safeMqttPublish(mqtt_topic_time, timeInfo.c_str());
   
   if (result) {
     DBG.println("DBG: Time info published successfully!");
@@ -865,7 +812,7 @@ void publishNTPTime() {
 void publishLightStatus() {
   DBG.println("DBG: publishLightStatus() called");
   
-  if (WiFi.status() != WL_CONNECTED) {
+  if (!wifiReady()) {
     DBG.println("DBG: WiFi not connected, skipping LED status publish");
     return;
   }
@@ -887,7 +834,7 @@ void publishLightStatus() {
   DBG.print("DBG: LED Status: ");
   DBG.println(statusStr);
   
-  bool result = mqttClient.publish(mqtt_topic_led_status, statusStr.c_str());
+  bool result = safeMqttPublish(mqtt_topic_led_status, statusStr.c_str());
   
   if (result) {
     DBG.println("DBG: LED status published successfully!");
@@ -902,7 +849,7 @@ void publishLightStatus() {
 void publishWiFiInfo() {
   DBG.println("DBG: publishWiFiInfo() called");
   
-  if (WiFi.status() != WL_CONNECTED) {
+  if (!wifiReady()) {
     DBG.println("DBG: WiFi not connected, skipping publish");
     return;
   }
@@ -922,7 +869,7 @@ void publishWiFiInfo() {
   DBG.print("DBG: Message: ");
   DBG.println(wifiInfo);
   
-  bool result = mqttClient.publish(mqtt_topic_output, wifiInfo.c_str());
+  bool result = safeMqttPublish(mqtt_topic_output, wifiInfo.c_str());
   
   if (result) {
     DBG.println("DBG: WiFi info published successfully!");
@@ -935,54 +882,62 @@ void publishWiFiInfo() {
 
 // ===== POŁĄCZENIE MQTT =====
 void reconnectMQTT() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  
+  if (!wifiReady()) return;
+
   static unsigned long lastAttempt = 0;
-  unsigned long now = millis();
-  
-  // Próbuj połączyć co 5 sekund
-  if (now - lastAttempt < 5000) return;
+  const unsigned long now = millis();
+
+  // Pierwsza próba od razu, kolejne nie częściej niż co 5 sekund.
+  if (lastAttempt != 0 && now - lastAttempt < 5000UL) return;
   lastAttempt = now;
-  
+
   DBG.println("\n======================================");
   DBG.println("DBG: Attempting MQTT connection...");
   DBG.print("DBG: MQTT Server: ");
   DBG.print(mqtt_server);
   DBG.print(":");
   DBG.println(mqtt_port);
-  
-  String clientId = String("PortentaH7-") + device_name + "-" + String(random(0xffff), HEX);
-  DBG.print("DBG: Client ID: ");
-  DBG.println(clientId);
-  
-  if (mqttClient.connect(clientId.c_str(), mqtt_user, mqtt_password)) {
+
+  // Stabilny Client ID powoduje, że broker usuwa ewentualne stare,
+  // zawieszone połączenie tego samego urządzenia.
+  const char* clientId = device_name;
+
+  const bool connected = mqttClient.connect(
+    clientId,
+    mqtt_user,
+    mqtt_password,
+    mqtt_topic_watchdog_status,
+    0,
+    true,
+    "offline"
+  );
+
+  if (connected) {
     DBG.println("DBG: MQTT Connected Successfully!");
-    
+
+    safeMqttPublish(mqtt_topic_watchdog_status, "online", true);
+
     DBG.print("DBG: Subscribing to topic: ");
     DBG.println(mqtt_topic_input);
-    bool subResult = mqttClient.subscribe(mqtt_topic_input);
-    if (subResult) {
-      DBG.println("DBG: Subscription successful!");
-    } else {
-      DBG.println("DBG: Subscription FAILED!");
-    }
-    
-    DBG.print("DBG: Publishing 'Online' message to: ");
-    DBG.println(mqtt_topic_output);
-    bool pubResult = mqttClient.publish(mqtt_topic_output, (String(device_name) + " Online").c_str());
-    if (pubResult) {
-      DBG.println("DBG: 'Online' message published successfully!");
-    } else {
-      DBG.println("DBG: 'Online' message publish FAILED!");
-    }
-    
-    // Publikuj informacje o WiFi
-    DBG.println("DBG: Calling publishWiFiInfo()...");
+    const bool inputSubResult = mqttClient.subscribe(mqtt_topic_input, 1);
+    DBG.println(inputSubResult ? "DBG: Light subscription request sent"
+                               : "DBG: Light subscription FAILED");
+
+    DBG.print("DBG: Subscribing to topic: ");
+    DBG.println(mqtt_topic_watchdog_reboot);
+    const bool rebootSubResult = mqttClient.subscribe(mqtt_topic_watchdog_reboot, 1);
+    DBG.println(rebootSubResult ? "DBG: Watchdog subscription request sent"
+                                : "DBG: Watchdog subscription FAILED");
+
+    safeMqttPublish(mqtt_topic_output, (String(device_name) + " Online").c_str());
     publishWiFiInfo();
+    publishLightStatus();
     DBG.println("======================================");
   } else {
     DBG.print("DBG: MQTT Connection FAILED, rc=");
     DBG.println(mqttClient.state());
+    DBG.println("DBG: rc -4=timeout, -3=lost, -2=TCP failed, 4=bad credentials, 5=unauthorized");
+    espClient.stop();
     DBG.println("DBG: Will retry in 5 seconds");
     DBG.println("======================================");
   }
@@ -995,20 +950,47 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     message += (char)payload[i];
   }
   
+  message.trim();
+
   DBG.println("\n=== MQTT Message Received ===");
   DBG.print("DBG: Topic: ");
   DBG.println(topic);
   DBG.print("DBG: Message: ");
   DBG.println(message);
   DBG.println("=============================");
+
+  if (strcmp(topic, mqtt_topic_watchdog_reboot) == 0) {
+    if (message.equalsIgnoreCase("reboot") || message == "1" ||
+        message.equalsIgnoreCase("true")) {
+      DBG.println("DBG: Remote reboot command accepted");
+      pendingRemoteReboot = true;
+    } else if (message.length() > 0) {
+      DBG.println("DBG: Remote reboot command ignored - expected reboot/1/true");
+    }
+    return;
+  }
+
+  if (strcmp(topic, mqtt_topic_input) != 0) {
+    DBG.println("DBG: Message ignored - unsupported topic");
+    return;
+  }
   
   // Parsowanie wiadomości (format: "day=1" lub "day=0")
   if (message.startsWith("day=")) {
-    int dayValue = message.substring(4).toInt();
+    const String dayText = message.substring(4);
+    if (dayText != "0" && dayText != "1") {
+      DBG.println("DBG: Invalid day command - expected day=0 or day=1");
+      return;
+    }
+    int dayValue = dayText.toInt();
     isDayTime = (dayValue == 1);
     DBG.print("DBG: Day/Night mode updated to: ");
     DBG.println(isDayTime ? "DAY (lights off)" : "NIGHT (lights on)");
-    updateLightMode(); // Natychmiastowa aktualizacja trybu
+    const LightMode previousMode = currentMode;
+    updateLightMode(); // Zmiana trybu sama wysyla ramki.
+    if (currentMode == previousMode) {
+      applyLightMode(); // Powtorzona komenda ponawia aktualny stan.
+    }
   }
   else if (message.startsWith("night:")) {
     // Opcjonalnie: aktualizacja godzin trybu nocnego "night:21:00-05:30"
@@ -1046,6 +1028,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
 // ===== AKTUALIZACJA TRYBU OŚWIETLENIA =====
 void updateLightMode() {
+  if (!ntpTimeValid) {
+    DBG.println("DBG: Time not valid yet - keeping safe light state");
+    if (isDayTime && currentMode != MODE_OFF) {
+      currentMode = MODE_OFF;
+      applyLightMode();
+    }
+    return;
+  }
+
   int currentHour = getDublinHours();
   int currentMinute = getDublinMinutes();
   int currentTimeMin = currentHour * 60 + currentMinute;
@@ -1115,7 +1106,7 @@ void updateLightMode() {
     DBG.println(currentMinute);
     DBG.println("=========================");
     
-    mqttClient.publish(mqtt_topic_output, ("Mode: " + modeStr).c_str());
+    safeMqttPublish(mqtt_topic_output, ("Mode: " + modeStr).c_str());
     publishLightStatus(); // Publikuj również czytelny stan
   } else {
     DBG.println("DBG: No mode change needed\n");
@@ -1142,7 +1133,7 @@ void applyLightMode() {
       DBG.println("DBG: Setting 13 LED points for night mode 10%");
       for (int stair = 0; stair < NUM_STAIRS; stair++) {
         int ledIndex = getStairCenterIndex(stair);
-        strip.setPixelColor(ledIndex, strip.Color(0, 128, 128)); // Cyjan 10%
+        strip.setPixelColor(ledIndex, strip.Color(0, 26, 26)); // Cyjan ok. 10%
       }
       break;
       
@@ -1154,197 +1145,61 @@ void applyLightMode() {
   }
   
   strip.show();
+  delay(5); // Powtorz te sama ramke po przerwie.
+  strip.show();
   DBG.println("DBG: Light mode applied and strip updated");
 }
 
-// ===== ODCZYT I PUBLIKACJA CZUJNIKÓW =====
+// ===== ODCZYT I PUBLIKACJA DS18B20 =====
 void readAndPublishSensors() {
-  DBG.println("\n========================================");
-  DBG.println("DBG: === SENSOR READ CYCLE START ===");
-  DBG.println("========================================");
-  
-  // =============================================
-  // KROK 1: ODCZYT DHT (jeśli dostępny)
-  // =============================================
-  static float lastValidTemp = NAN;
-  static float lastValidHum = NAN;
-  static int dhtNanStreak = 0;
-  
-  if (dhtAvailable) {
-    DBG.println("DBG: [DHT] Starting read cycle...");
-    DBG.print("DBG: [DHT] Pin: D");
-    DBG.println(DHT_PIN);
-    DBG.print("DBG: [DHT] Type: ");
-    DBG.println(dhtType == DHT11 ? "DHT11" : "DHT22");
-    
-    float temp = dhtPtr->readTemperature();
-    float humidity = dhtPtr->readHumidity() * 1.5; // Korekcja x1.5
-    
-    DBG.print("DBG: [DHT] Temperature raw: ");
-    DBG.print(temp);
-    DBG.println(" °C");
-    DBG.print("DBG: [DHT] Humidity raw (x1.5): ");
-    DBG.print(humidity);
-    DBG.println(" %");
-
-    bool tempValid = !isnan(temp);
-    bool humValid = !isnan(humidity);
-    
-    DBG.print("DBG: [DHT] Temperature valid: ");
-    DBG.println(tempValid ? "YES" : "NO (NaN)");
-    DBG.print("DBG: [DHT] Humidity valid: ");
-    DBG.println(humValid ? "YES" : "NO (NaN)");
-
-    // RE-DETEKCJA po 3 nieudanych odczytach
-    if (!tempValid || !humValid) {
-      dhtNanStreak++;
-      DBG.print("DBG: [DHT] *** NaN streak: ");
-      DBG.print(dhtNanStreak);
-      DBG.println("/3 (will re-detect after 3)");
-      
-      if (dhtNanStreak >= 3) {
-        DBG.println("DBG: [DHT] *** 3 FAILED READS - RE-RUNNING SENSOR DETECTION ***");
-        initSensors();
-        dhtNanStreak = 0;
-      }
-      
-      DBG.println("DBG: [DHT] *** WARNING: Read returned NaN - sensor may be disconnected ***");
-      // Opcja: publikuj ostatnią poprawną wartość zamiast NaN
-      if (!isnan(lastValidTemp) && !isnan(lastValidHum)) {
-        temp = lastValidTemp;
-        humidity = lastValidHum;
-        tempValid = true;
-        humValid = true;
-        DBG.println("DBG: [DHT] Using last valid values for publish");
-      }
-    } else {
-      // Sukces - zapisz jako ostatnie poprawne wartości
-      lastValidTemp = temp;
-      lastValidHum = humidity;
-      if (dhtNanStreak > 0) {
-        DBG.println("DBG: [DHT] Valid read - resetting NaN streak counter");
-      }
-      dhtNanStreak = 0;
-      DBG.println("DBG: [DHT] Read SUCCESS");
-    }
-
-    // Publikacja DHT (tylko jeśli są ważne dane do publikacji)
-    if ((tempValid && humValid) && mqttClient.connected()) {
-      String tempStr = String(temp, 1);
-      String humStr  = String(humidity, 1);
-
-      DBG.println("\nDBG: [DHT] Publishing data...");
-      DBG.print("DBG: [DHT]   Temperature: ");
-      DBG.print(tempStr);
-      DBG.print(" °C -> ");
-      DBG.println(mqtt_topic_temp_dht);
-      bool tempPub = mqttClient.publish(mqtt_topic_temp_dht, tempStr.c_str());
-      DBG.print("DBG: [DHT]   Result: ");
-      DBG.println(tempPub ? "SUCCESS" : "FAILED");
-      
-      DBG.print("DBG: [DHT]   Humidity: ");
-      DBG.print(humStr);
-      DBG.print(" % -> ");
-      DBG.println(mqtt_topic_humidity);
-      bool humPub = mqttClient.publish(mqtt_topic_humidity, humStr.c_str());
-      DBG.print("DBG: [DHT]   Result: ");
-      DBG.println(humPub ? "SUCCESS" : "FAILED");
-    } else if (!mqttClient.connected()) {
-      DBG.println("DBG: [DHT] *** MQTT NOT CONNECTED - SKIPPING PUBLISH ***");
-    } else {
-      DBG.println("DBG: [DHT] *** Invalid data - SKIPPING PUBLISH ***");
-    }
-  } else {
-    DBG.println("DBG: [DHT] Sensor not available - skipping");
-  }
-  
-  DBG.println("DBG: [DHT] === DHT READ CYCLE END ===\n");
-  
-  // =============================================
-  // KROK 2: ODCZYT DS18B20 (jeśli dostępny)
-  // =============================================
   static float lastValidTempDS = NAN;
-  static int ds18NanStreak = 0;
-  
-  DBG.println("DBG: [DS18B20] === DS18B20 READ CYCLE START ===");
-  DBG.print("DBG: [DS18B20] ds18b20Available: ");
-  DBG.println(ds18b20Available ? "TRUE" : "FALSE");
-  
-  if (ds18b20Available) {
-    DBG.println("DBG: [DS18B20] Requesting temperature...");
-    ds18b20.requestTemperatures();
-    delay(900); // Czas konwersji dla maksymalnej rozdzielczości
-    
-    float temp = ds18b20.getTempCByIndex(0);
-    DBG.print("DBG: [DS18B20] Raw temperature: ");
-    DBG.print(temp);
-    DBG.println(" °C");
-    
-    bool tempInRange = (temp > -50 && temp < 100);
-    bool notDisconnected = (temp != DEVICE_DISCONNECTED_C);
-    
-    DBG.print("DBG: [DS18B20] In range (-50 to 100): ");
-    DBG.println(tempInRange ? "YES" : "NO");
-    DBG.print("DBG: [DS18B20] Connected: ");
-    DBG.println(notDisconnected ? "YES" : "NO");
-    
-    if (notDisconnected && tempInRange) {
-      // Sukces - zapisz jako ostatnią poprawną wartość
-      lastValidTempDS = temp;
-      if (ds18NanStreak > 0) {
-        DBG.println("DBG: [DS18B20] Valid read - resetting error streak");
-      }
-      ds18NanStreak = 0;
-      
-      if (mqttClient.connected()) {
-        String tempStr = String(temp, 2);
-        DBG.print("DBG: [DS18B20] Publishing: ");
-        DBG.print(tempStr);
-        DBG.print(" °C -> ");
-        DBG.println(mqtt_topic_temp_ds);
-        
-        bool dsPub = mqttClient.publish(mqtt_topic_temp_ds, tempStr.c_str());
-        DBG.print("DBG: [DS18B20] Result: ");
-        DBG.println(dsPub ? "SUCCESS" : "FAILED");
-      } else {
-        DBG.println("DBG: [DS18B20] *** MQTT NOT CONNECTED - SKIPPING PUBLISH ***");
-      }
-    } else {
-      // Błąd odczytu
-      ds18NanStreak++;
-      DBG.print("DBG: [DS18B20] *** Read error (streak: ");
-      DBG.print(ds18NanStreak);
-      DBG.println("/3)");
-      
-      if (!notDisconnected) {
-        DBG.println("DBG: [DS18B20]   Reason: Sensor DISCONNECTED");
-      }
-      if (!tempInRange) {
-        DBG.println("DBG: [DS18B20]   Reason: Temperature OUT OF RANGE");
-      }
-      
-      // Re-detekcja po 3 błędach
-      if (ds18NanStreak >= 3) {
-        DBG.println("DBG: [DS18B20] *** 3 FAILED READS - RE-RUNNING SENSOR DETECTION ***");
-        initSensors();
-        ds18NanStreak = 0;
-      }
-      
-      // Opcja: publikuj ostatnią poprawną wartość
-      if (!isnan(lastValidTempDS) && mqttClient.connected()) {
-        String tempStr = String(lastValidTempDS, 2);
-        DBG.println("DBG: [DS18B20] Using last valid value for publish");
-        mqttClient.publish(mqtt_topic_temp_ds, tempStr.c_str());
-      }
-    }
-  } else {
-    DBG.println("DBG: [DS18B20] Sensor not available - skipping");
+  static int ds18ErrorStreak = 0;
+
+  DBG.println("DBG: [DS18B20] Read cycle start");
+
+  if (!ds18b20Available) {
+    DBG.println("DBG: [DS18B20] Sensor unavailable - retrying detection");
+    initSensors();
+    return;
   }
-  
-  DBG.println("DBG: [DS18B20] === DS18B20 READ CYCLE END ===");
-  DBG.println("========================================");
-  DBG.println("DBG: === ALL SENSORS READ CYCLE END ===");
-  DBG.println("========================================\n");
+
+  ds18b20.requestTemperatures();
+  serviceDelay(800); // 12-bit conversion; MQTT and watchdog stay serviced.
+
+  const float temp = ds18b20.getTempCByIndex(0);
+  const bool valid = temp != DEVICE_DISCONNECTED_C && temp > -50.0f && temp < 100.0f;
+
+  if (valid) {
+    lastValidTempDS = temp;
+    ds18ErrorStreak = 0;
+
+    DBG.print("DBG: [DS18B20] Temperature: ");
+    DBG.print(temp);
+    DBG.println(" C");
+
+    if (mqttClient.connected()) {
+      const String tempStr = String(temp, 2);
+      const bool published = safeMqttPublish(mqtt_topic_temp_ds, tempStr.c_str());
+      DBG.println(published ? "DBG: [DS18B20] MQTT publish OK"
+                            : "DBG: [DS18B20] MQTT publish skipped/failed");
+    }
+    return;
+  }
+
+  ds18ErrorStreak++;
+  DBG.print("DBG: [DS18B20] Invalid reading, streak=");
+  DBG.println(ds18ErrorStreak);
+
+  if (ds18ErrorStreak >= 3) {
+    ds18b20Available = false;
+    ds18ErrorStreak = 0;
+    initSensors();
+  }
+
+  if (!isnan(lastValidTempDS) && mqttClient.connected()) {
+    const String tempStr = String(lastValidTempDS, 2);
+    safeMqttPublish(mqtt_topic_temp_ds, tempStr.c_str());
+  }
 }
 
 // ===== PUBLIKACJA STATUSU =====
@@ -1366,7 +1221,7 @@ void publishStatus() {
   DBG.print("DBG: Status message: ");
   DBG.println(status);
   
-  bool result = mqttClient.publish(mqtt_topic_output, status.c_str());
+  bool result = safeMqttPublish(mqtt_topic_output, status.c_str());
   if (result) {
     DBG.println("DBG: Status published successfully to MQTT");
   } else {
